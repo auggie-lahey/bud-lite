@@ -68,10 +68,13 @@ async function resolveRecordingFallback(episodeEvent: NostrEvent | undefined): P
 
     if (events.length === 0) return null;
 
-    const recording = events[0].tags.find(([name]) => name === 'recording')?.[1];
-    if (recording) {
-      console.log(`✅ Found recording fallback: ${recording.substring(0, 80)}...`);
-      return recording;
+    // Try all available URL tags from the livestream event
+    const fallbackUrl = events[0].tags.find(([name]) => name === 'recording')?.[1]
+      ?? events[0].tags.find(([name]) => name === 'download')?.[1]
+      ?? events[0].tags.find(([name]) => name === 'streaming')?.[1];
+    if (fallbackUrl) {
+      console.log(`✅ Found fallback URL: ${fallbackUrl.substring(0, 80)}...`);
+      return fallbackUrl;
     }
   } catch (error) {
     console.warn(`⚠️  Failed to fetch livestream for fallback:`, error);
