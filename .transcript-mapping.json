@@ -1,16 +1,16 @@
 [
   {
     "dTag": "fd9955bc-92a7-43fc-a8e9-877175cd42ae",
-    "transcriptPath": "/home/runner/work/podstr/podstr/transcripts/Commissioner_s_Meeting-1773434094.srt",
-    "transcriptUrl": "https://kurt-croix.github.io/podstr/transcripts/Commissioner_s_Meeting-1773434094.srt",
+    "transcriptPath": "/home/runner/work/podstr/podstr/transcripts/Commissioner_s_Meeting-1778249375.srt",
+    "transcriptUrl": "https://kurt-croix.github.io/podstr/transcripts/Commissioner_s_Meeting-1778249375.srt",
     "success": true,
     "event": {
       "content": "",
-      "created_at": 1773434094,
-      "id": "efad528e1582d5d24362f220d975a7137fec56eb6529fa9cd5337a77a4cf88b3",
+      "created_at": 1778249375,
+      "id": "e5a5b0e1ab300d8fbe0c63fe66b6855e0e338ddbdc499be965feb895cb1b53aa",
       "kind": 30054,
       "pubkey": "f38a7f8e088ea727e316b990da29cdf8d13352b5fa095941114b83fefa4b67fa",
-      "sig": "8390c97215051b4d9b437a2d4bac83c7e6feac61edd078e87b4670881f52a0f547080580149e2fbe6ca75d8eef2e6a704577a22fbbeb9b0eaffa16c691a0d4c3",
+      "sig": "b582339a429a57f8d2f956d0f51fa186cc728e90db8a700034f2d01f9def320a43d01a71da732c67fa0b50f3c33b2610ce30625f5f7ee6128ac0c4da2af1be77",
       "tags": [
         [
           "d",
@@ -51,6 +51,10 @@
         [
           "livestream",
           "30311:85df822a86599ffbe8143db1e1e1bf2d162fa60fc685c65515963e67cfd7499f:fd9955bc-92a7-43fc-a8e9-877175cd42ae"
+        ],
+        [
+          "description",
+          "The Ray County Commission addressed several administrative and legislative items during their recent meeting. Commissioners approved a resolution expressing public health and safety concerns regarding Kratom and synthetic 7-OH products, urging state-level regulation and community awareness. They noted that local stores have already begun removing these items. \n\nThe commission tabled discussions regarding Sunshine request fees and procedures until next week pending legal counsel review, and tabled sheriff's office matters until tomorrow. Additionally, the commission approved routine invoices, resolved a billing address issue with Diamond Mower, and confirmed the county currently has no active contract for fertilizing services.\n\n===== FULL DESCRIPTION =====\n\n**Meeting Summary: Ray County Commission**\n\nThe Ray County Commission recently held a regular meeting to address administrative bills, vote on a significant public health resolution, and discuss procedures for handling public records requests. \n\n**Key Decisions and Legislation**\nThe most notable action taken during the meeting was the unanimous approval of a resolution expressing concern about the sale and use of Kratom and synthetic 7-OH products in Ray County. The commission discussed how these products, often sold in local gas stations and convenience stores, carry risks of dependence and pose public safety concerns. \n\nAfter consulting with legal counsel and researching ordinances from Kansas City, the Commission passed a resolution urging the Missouri General Assembly to adopt a clear regulatory framework. This requested framework includes implementing a minimum age limit of 21, establishing basic product standards, and banning or strictly regulating high-risk synthetic products. While the Commission acknowledged they lack the local authority to independently ban the substances, they noted that drawing attention to the issue has already prompted several local retailers to voluntarily remove the products from their shelves. \n\n**Administrative and Financial Matters**\nPrior to the legislative discussion, the Commission reviewed and signed off on multiple county invoices. A point of discussion was raised regarding a billing discrepancy with Diamond Mowers. The Commission clarified that an employee had previously been using a personal address for parts delivery. The county has since corrected the system to ensure parts are shipped to the appropriate county facility while bills are directed to the correct administrative address. \n\nAdditionally, the Commission briefly reviewed medical and prescription billing procedures, specifically differentiating the financial workflows between the county jail and local emergency rooms. \n\n**Sunshine Law Requests**\nThe Commission addressed the increasing volume of Sunshine Law (public records) requests received by the county. To ensure compliance and establish a standardized process, the Commission discussed the parameters and fee structures for fulfilling these requests. Currently, the county charges an hourly fee based on the salary of the lowest-paid clerical employee capable of retrieving the documents. Because county salaries have recently changed, the Commission voted to table the discussion on updating these charges until next week, pending a full review and report from legal counsel. \n\n**Other Business and Action Items**\n*   **Sheriff’s Office:** The agenda item regarding the Ray County Sheriff’s Office was tabled and rescheduled for the following day.\n*   **Vendor Contracts:** It was publicly confirmed that the county does not currently have an active, ongoing contract for fertilization services.\n*   **Committee Attendance:** An administrative discussion was held regarding strategies for attending various regional and state committee meetings, emphasizing the need to review agendas in advance to prioritize meetings that directly impact county projects and employment needs lists. \n\nThe meeting briefly touched upon recent severe weather in the region before the Commission concluded the formal session and moved into administrative follow-ups.\n\nTranscription: https://kurt-croix.github.io/podstr/transcripts/Commissioner_s_Meeting-1773434094.srt"
         ]
       ]
     }
