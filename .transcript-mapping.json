@@ -1,9 +1,58 @@
 [
   {
     "dTag": "d4de22be-8d87-46d7-aa50-83475a454248",
-    "transcriptPath": "",
-    "transcriptUrl": "",
-    "success": false,
-    "error": "WhisperX failed with exit code 1"
+    "transcriptPath": "/home/runner/work/podstr/podstr/transcripts/Untitled-1778269793.srt",
+    "transcriptUrl": "https://kurt-croix.github.io/podstr/transcripts/Untitled-1778269793.srt",
+    "success": true,
+    "event": {
+      "content": "",
+      "created_at": 1778269793,
+      "id": "82328c948a45538a2e7fa28b34a5246f68e16c17d5e7a8c1cd1f50a969619f62",
+      "kind": 30054,
+      "pubkey": "f38a7f8e088ea727e316b990da29cdf8d13352b5fa095941114b83fefa4b67fa",
+      "sig": "b062b34ef39c9945843d3674df503fd2e3136e381c889a71dad2725ac595f1e32e7b812974161553114212d43ed36cfe6c3ee06209cb2c7610cfbc32b3bc6670",
+      "tags": [
+        [
+          "d",
+          "d4de22be-8d87-46d7-aa50-83475a454248"
+        ],
+        [
+          "title",
+          "Untitled"
+        ],
+        [
+          "summary",
+          ""
+        ],
+        [
+          "audio",
+          "https://customer-51tzzrmdygiq19h7.cloudflarestream.com/5d7614a556abcfbf81d893d69e166230/downloads/default.mp4"
+        ],
+        [
+          "image",
+          "https://customer-51tzzrmdygiq19h7.cloudflarestream.com/5d7614a556abcfbf81d893d69e166230/thumbnails/thumbnail.jpg"
+        ],
+        [
+          "duration",
+          "0"
+        ],
+        [
+          "alt",
+          "Podcast episode: Untitled"
+        ],
+        [
+          "client",
+          "podstr-github-actions"
+        ],
+        [
+          "t",
+          "livestream"
+        ],
+        [
+          "livestream",
+          "30311:85df822a86599ffbe8143db1e1e1bf2d162fa60fc685c65515963e67cfd7499f:d4de22be-8d87-46d7-aa50-83475a454248"
+        ]
+      ]
+    }
   }
 ]
