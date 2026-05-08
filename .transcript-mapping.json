@@ -1,16 +1,16 @@
 [
   {
     "dTag": "d4de22be-8d87-46d7-aa50-83475a454248",
-    "transcriptPath": "/home/runner/work/podstr/podstr/transcripts/Untitled-1778269793.srt",
-    "transcriptUrl": "https://kurt-croix.github.io/podstr/transcripts/Untitled-1778269793.srt",
+    "transcriptPath": "/home/runner/work/podstr/podstr/transcripts/Untitled-1778276715.srt",
+    "transcriptUrl": "https://kurt-croix.github.io/podstr/transcripts/Untitled-1778276715.srt",
     "success": true,
     "event": {
       "content": "",
-      "created_at": 1778269793,
-      "id": "82328c948a45538a2e7fa28b34a5246f68e16c17d5e7a8c1cd1f50a969619f62",
+      "created_at": 1778276715,
+      "id": "67febad95e149cf97e14ef8ae55bcaeeb05285c71c9054441343454543332784",
       "kind": 30054,
       "pubkey": "f38a7f8e088ea727e316b990da29cdf8d13352b5fa095941114b83fefa4b67fa",
-      "sig": "b062b34ef39c9945843d3674df503fd2e3136e381c889a71dad2725ac595f1e32e7b812974161553114212d43ed36cfe6c3ee06209cb2c7610cfbc32b3bc6670",
+      "sig": "04a290469e1028b1055dd6b5ce8a50cddb34b23b5615c0da65cddbe12956b683d33888468c34fc15835b775d28628c2278b24137f10e3da3e299589353bf7bb3",
       "tags": [
         [
           "d",
@@ -51,6 +51,10 @@
         [
           "livestream",
           "30311:85df822a86599ffbe8143db1e1e1bf2d162fa60fc685c65515963e67cfd7499f:d4de22be-8d87-46d7-aa50-83475a454248"
+        ],
+        [
+          "description",
+          "This meeting primarily focused on addressing discrepancies in the upcoming budget. Officials discussed a missing $6,000 line item and the significant financial impact of implementing a mandatory 3% cost-of-living adjustment (COLA) for employees, which could increase overall expenses by nearly $100,000. A department head clarified that previous projections were lower due to a late-August hire and earlier $25,000 salary cuts. \n\nTo properly reconcile these figures, the board made two successful motions to table both the specific departmental budget discussion and the overall budget approval until the following morning. Additionally, the board outlined upcoming agenda items, including ethics reports and a resident road request scheduled for April 1st.\n\n===== FULL DESCRIPTION =====\n\nThis government meeting primarily focused on administrative updates, upcoming agenda planning, and addressing significant discrepancies within the proposed annual budget.\n\n**Upcoming Agenda and Administrative Items**\nThe commission briefly reviewed its schedule for the upcoming weeks, identifying several key topics that require formal discussion. A meeting regarding a jail increase system is scheduled for an upcoming Wednesday. Additionally, during an April 1st meeting, the commission will review an ethics commission report and hear from a returning citizen. This citizen previously petitioned the board regarding the status and maintenance of a portion of his road. The necessary public notifications have been posted for the surrounding residents. \n\n**Budget Review and Salary Discrepancies**\nThe most substantial portion of the meeting centered on the upcoming fiscal year budget, brought before the board by staff members Sandy and Camille. Upon review, several critical omissions and discrepancies were identified that prevented the budget from being approved as currently written:\n\n*   **Missing Line Item:** A $6,000 expense was omitted from the current budget draft.\n*   **Statutory Salary Increase:** Sandy noted that her statutory salary is scheduled for an annual increase based on state statute. However, the current budget draft reflects last year's rate. The new budget needs to accurately reflect her current salary for the first half of the year and the statutory increase for the second half.\n*   **Cost of Living Adjustment (COLA):** Staff raised concerns regarding a mandated 3% COLA for full-time employees. While the 3% increase was approved, the budget's salary line items, along with associated payroll taxes (Medicare and Social Security), were left exactly the same as the previous year. Staff noted that if the COLA is mandatory, the baseline budget numbers must be increased to cover the higher payroll costs.\n*   **Large Budget Discrepancy Explained:** The board questioned a massive discrepancy of roughly $90,000 to $100,000 between two budget drafts (comparing a $279,000 figure to a $364,000 figure). Staff clarified this was not an error, but rather a timing issue. A $70,000 salaried employee did not start until August of the previous year, meaning the prior year's expenses were artificially low. Additionally, $25,000 had previously been cut from salary lines to balance a prior budget. \n\n**Key Decisions and Action Items**\nBecause of the significant mathematical discrepancies regarding the COLA and salary baselines, the board determined the budget required further revision. A motion was made, seconded, and unanimously approved to table the budget approval, as well as the deeper discussion with Camille, until the following day. The delay also ensures a full board is present, as one member was absent. \n\nAs an action item, staff agreed to meet later that afternoon to reconcile the numbers. They will generate a new worksheet clearly showing the actual costs of the 3% COLA, statutory increases, and full-year salary projections, allowing the board to confidently vote on the revised budget the following morning at 10:00 AM.\n\nTranscription: https://kurt-croix.github.io/podstr/transcripts/Untitled-1778269793.srt"
         ]
       ]
     }
