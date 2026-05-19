@@ -21,15 +21,19 @@ on:
 permissions:
   contents: write
 
+# Secrets = actual API keys (sensitive)
+# Vars = config values (pubkeys, URLs, model names — NOT secret)
 env:
-  QDRANT_URL: ${{ secrets.QDRANT_URL }}
+  # Secrets
   QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
   HF_API_KEY: ${{ secrets.HF_API_KEY }}
   DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
-  DEV_LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
-  DEV_LLM_MODEL: ${{ secrets.LLM_MODEL }}
-  PUBKEYS: ${{ secrets.PUBKEYS }}
-  PUBKEY_LABELS: ${{ secrets.PUBKEY_LABELS }}
+  # Variables (non-sensitive config)
+  QDRANT_URL: ${{ vars.QDRANT_URL }}
+  DEV_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+  DEV_LLM_MODEL: ${{ vars.LLM_MODEL }}
+  PUBKEYS: ${{ vars.PUBKEYS }}
+  PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
 
 jobs:
   terraform:
@@ -57,11 +61,8 @@ jobs:
         run: |
           terraform plan \
             -var="qdrant_cloud_api_key=${{ secrets.QDRANT_CLOUD_API_KEY }}" \
-            -var="qdrant_cloud_account_id=${{ secrets.QDRANT_CLOUD_ACCOUNT_ID }}" \
+            -var="qdrant_cloud_account_id=${{ vars.QDRANT_CLOUD_ACCOUNT_ID }}" \
             -out=tfplan
-        env:
-          TF_VAR_qdrant_cloud_api_key: ${{ secrets.QDRANT_CLOUD_API_KEY }}
-          TF_VAR_qdrant_cloud_account_id: ${{ secrets.QDRANT_CLOUD_ACCOUNT_ID }}
 
       - name: Terraform Apply
         id: apply
@@ -69,17 +70,12 @@ jobs:
         continue-on-error: true
         run: |
           terraform apply -auto-approve tfplan
-          # Capture outputs
           echo "cluster_url=$(terraform output -raw cluster_url 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
-          # Detect if state changed
           if git diff --quiet terraform.tfstate 2>/dev/null; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
-        env:
-          TF_VAR_qdrant_cloud_api_key: ${{ secrets.QDRANT_CLOUD_API_KEY }}
-          TF_VAR_qdrant_cloud_account_id: ${{ secrets.QDRANT_CLOUD_ACCOUNT_ID }}
 
       - name: Commit Terraform State
         if: always() && steps.apply.outputs.changed == 'true'
@@ -94,7 +90,7 @@ jobs:
       - name: Terraform Plan Failed
         if: steps.plan.outcome == 'failure'
         run: |
-          echo "::warning::Terraform plan failed. Check logs. Sync will use existing QDRANT_URL secret."
+          echo "::warning::Terraform plan failed. Check logs. Sync will use existing QDRANT_URL."
           exit 0
 
   sync:
