@@ -1,0 +1,182 @@
+name: Terraform + Sync
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      full_sync:
+        description: 'Full sync (re-fetch all events)'
+        required: false
+        default: 'false'
+        type: choice
+        options: [ 'false', 'true' ]
+      apply_terraform:
+        description: 'Run terraform apply (creates cluster if missing)'
+        required: false
+        default: 'false'
+        type: choice
+        options: [ 'false', 'true' ]
+
+permissions:
+  contents: write
+  id-token: write
+  actions: write
+
+# Only Qdrant credentials are required. HF/LLM keys are optional —
+# if set, enable faster remote embedding and soul generation.
+# Users configure their own keys in the browser Settings modal.
+env:
+  # Required: Qdrant cluster access
+  QDRANT_URL: ${{ vars.QDRANT_URL }}
+  QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+  # Optional: faster embeddings (without this, uses free HF API tier)
+  HF_API_KEY: ${{ secrets.HF_API_KEY }}
+  # Optional: soul generation (without this, soul step is skipped)
+  DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
+  DEV_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+  DEV_LLM_MODEL: ${{ vars.LLM_MODEL }}
+  # Config (not secrets)
+  PUBKEYS: ${{ vars.PUBKEYS }}
+  PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: iac
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '~1.9'
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        continue-on-error: true
+        run: |
+          terraform plan \
+            -var="qdrant_cloud_api_key=${{ secrets.QDRANT_CLOUD_API_KEY }}" \
+            -var="qdrant_cloud_account_id=${{ vars.QDRANT_CLOUD_ACCOUNT_ID }}" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        id: apply
+        if: steps.plan.outcome == 'success' && (github.event.inputs.apply_terraform == 'true' || github.event_name == 'schedule')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          terraform apply -auto-approve tfplan
+          # Write outputs directly to GitHub vars/secrets (never logged)
+          CLUSTER_URL=$(terraform output -raw cluster_url 2>/dev/null || echo '')
+          CLUSTER_KEY=$(terraform output -raw app_api_key 2>/dev/null || echo '')
+          if [ -n "$CLUSTER_URL" ]; then
+            gh variable set QDRANT_URL --body "$CLUSTER_URL" -R "${{ github.repository }}"
+          fi
+          if [ -n "$CLUSTER_KEY" ]; then
+            gh secret set QDRANT_API_KEY --body "$CLUSTER_KEY" -R "${{ github.repository }}"
+          fi
+          if git diff --quiet terraform.tfstate 2>/dev/null; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit Terraform State
+        if: always() && steps.apply.outputs.changed == 'true'
+        run: |
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add iac/terraform.tfstate
+          git diff --staged --quiet || git commit -m "chore: update terraform state [skip ci]"
+          git push
+
+      - name: Terraform Plan Failed
+        if: steps.plan.outcome == 'failure'
+        run: |
+          echo "::warning::Terraform plan failed. Sync will use existing QDRANT_URL."
+          exit 0
+
+  sync:
+    needs: terraform
+    runs-on: ubuntu-latest
+    if: always() && env.QDRANT_URL != ''
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Nostr sync
+        id: sync
+        continue-on-error: true
+        run: |
+          FULL_FLAG=""
+          if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
+            FULL_FLAG="--full"
+          fi
+          python -m worker.runner sync $FULL_FLAG
+
+      - name: Generate soul hints (optional — needs LLM_API_KEY)
+        if: env.DEV_LLM_KEY != ''
+        continue-on-error: true
+        run: python -m worker.runner souls
+
+      - name: Copy soul-hints to consumer-site
+        if: always()
+        run: |
+          if [ -f data/souls/hints.json ]; then
+            cp data/souls/hints.json ../consumer-site/public/soul-hints.json
+            echo "Copied soul-hints.json"
+          fi
+
+      - name: Commit changes
+        if: always()
+        run: |
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: sync nostr notes + update soul hints [skip ci]"
+            git push
+          fi
+
+      - name: Build and deploy consumer-site
+        if: always()
+        continue-on-error: true
+        run: |
+          cd ../consumer-site
+          npm ci
+          npm run deploy
+
+  notify:
+    needs: [terraform, sync]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Job failed
+        run: |
+          echo "::error::Pipeline failed. Check terraform and sync logs."
+          echo "Terraform: ${{ needs.terraform.result }}"
+          echo "Sync: ${{ needs.sync.result }}"
