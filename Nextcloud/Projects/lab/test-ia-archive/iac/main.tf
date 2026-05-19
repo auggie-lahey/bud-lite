@@ -31,7 +31,7 @@ resource "qdrant-cloud_accounts_cluster" "nostr_rag" {
       }
     }
     node_configuration {
-      package_id = data.qdrant-cloud_accounts_cluster_packages.free_tier.packages[0].id
+      package_id = local.free_package
     }
   }
 }
@@ -41,9 +41,16 @@ resource "qdrant-cloud_accounts_database_api_key_v2" "app_key" {
   name       = "github-actions-sync"
 }
 
-data "qdrant-cloud_accounts_cluster_packages" "free_tier" {
+data "qdrant-cloud_booking_packages" "available" {
   cloud_provider = "aws"
   cloud_region   = "us-east-1"
+}
+
+locals {
+  # Pick the cheapest free-tier package (lowest CPU + RAM)
+  free_package = sort([
+    for p in data.qdrant-cloud_booking_packages.available.packages : p.id
+  ])[0]
 }
 
 variable "qdrant_cloud_api_key" {
@@ -67,6 +74,6 @@ output "cluster_id" {
 }
 
 output "app_api_key" {
-  value     = qdrant-cloud_accounts_database_api_key_v2.app_key.api_key
+  value     = qdrant-cloud_accounts_database_api_key_v2.app_key.key
   sensitive = true
 }
