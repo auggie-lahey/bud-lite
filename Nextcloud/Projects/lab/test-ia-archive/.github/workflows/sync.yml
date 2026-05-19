@@ -21,17 +21,20 @@ on:
 permissions:
   contents: write
 
-# Secrets = actual API keys (sensitive)
-# Vars = config values (pubkeys, URLs, model names — NOT secret)
+# Only Qdrant credentials are required. HF/LLM keys are optional —
+# if set, enable faster remote embedding and soul generation.
+# Users configure their own keys in the browser Settings modal.
 env:
-  # Secrets
-  QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
-  HF_API_KEY: ${{ secrets.HF_API_KEY }}
-  DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
-  # Variables (non-sensitive config)
+  # Required: Qdrant cluster access
   QDRANT_URL: ${{ vars.QDRANT_URL }}
+  QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+  # Optional: faster embeddings (without this, uses free HF API tier)
+  HF_API_KEY: ${{ secrets.HF_API_KEY }}
+  # Optional: soul generation (without this, soul step is skipped)
+  DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
   DEV_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
   DEV_LLM_MODEL: ${{ vars.LLM_MODEL }}
+  # Config (not secrets)
   PUBKEYS: ${{ vars.PUBKEYS }}
   PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
 
@@ -90,7 +93,7 @@ jobs:
       - name: Terraform Plan Failed
         if: steps.plan.outcome == 'failure'
         run: |
-          echo "::warning::Terraform plan failed. Check logs. Sync will use existing QDRANT_URL."
+          echo "::warning::Terraform plan failed. Sync will use existing QDRANT_URL."
           exit 0
 
   sync:
@@ -123,8 +126,8 @@ jobs:
           fi
           python -m worker.runner sync $FULL_FLAG
 
-      - name: Generate soul hints
-        if: always() && steps.sync.outcome != 'cancelled'
+      - name: Generate soul hints (optional — needs LLM_API_KEY)
+        if: env.DEV_LLM_KEY != ''
         continue-on-error: true
         run: python -m worker.runner souls
 
