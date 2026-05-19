@@ -108,7 +108,7 @@ jobs:
   sync:
     needs: terraform
     runs-on: ubuntu-latest
-    if: always() && env.QDRANT_URL != ''
+    if: always() && vars.QDRANT_URL != ''
     defaults:
       run:
         working-directory: backend
