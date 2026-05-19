@@ -63,7 +63,7 @@ jobs:
         run: |
           terraform plan \
             -var="qdrant_cloud_api_key=${{ secrets.QDRANT_CLOUD_API_KEY }}" \
-            -var="qdrant_cloud_account_id=${{ vars.QDRANT_CLOUD_ACCOUNT_ID }}" \
+            -var="qdrant_cloud_account_id=${{ secrets.QDRANT_CLOUD_ACCOUNT_ID }}" \
             -out=tfplan
 
       - name: Terraform Apply
