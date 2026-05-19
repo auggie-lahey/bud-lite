@@ -66,7 +66,8 @@ variable "qdrant_cloud_account_id" {
 
 output "cluster_url" {
   value       = qdrant-cloud_accounts_cluster.nostr_rag.url
-  description = "Qdrant cluster URL — set as QDRANT_URL GitHub secret"
+  description = "Qdrant cluster URL"
+  sensitive   = true
 }
 
 output "cluster_id" {

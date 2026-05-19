@@ -20,6 +20,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  actions: write
 
 # Only Qdrant credentials are required. HF/LLM keys are optional —
 # if set, enable faster remote embedding and soul generation.
@@ -41,9 +43,6 @@ env:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.apply.outputs.changed }}
-      cluster_url: ${{ steps.apply.outputs.cluster_url }}
     defaults:
       run:
         working-directory: iac
@@ -71,9 +70,19 @@ jobs:
         id: apply
         if: steps.plan.outcome == 'success' && (github.event.inputs.apply_terraform == 'true' || github.event_name == 'schedule')
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           terraform apply -auto-approve tfplan
-          echo "cluster_url=$(terraform output -raw cluster_url 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          # Write outputs directly to GitHub vars/secrets (never logged)
+          CLUSTER_URL=$(terraform output -raw cluster_url 2>/dev/null || echo '')
+          CLUSTER_KEY=$(terraform output -raw app_api_key 2>/dev/null || echo '')
+          if [ -n "$CLUSTER_URL" ]; then
+            gh variable set QDRANT_URL --body "$CLUSTER_URL" -R "${{ github.repository }}"
+          fi
+          if [ -n "$CLUSTER_KEY" ]; then
+            gh secret set QDRANT_API_KEY --body "$CLUSTER_KEY" -R "${{ github.repository }}"
+          fi
           if git diff --quiet terraform.tfstate 2>/dev/null; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
