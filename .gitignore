@@ -38,3 +38,14 @@ dist-ssr
 .temp-audio-transcription/
 
 # Transcription temp files
+
+# Python
+.venv/
+
+# Terraform runtime (state IS committed for git-backend)
+iac/.terraform/
+iac/*.tfplan
+iac/.terraform.lock.hcl
+
+# Claude
+.claude/
