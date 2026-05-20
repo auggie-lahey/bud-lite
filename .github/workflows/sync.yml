@@ -21,11 +21,8 @@ on:
 permissions:
   contents: write
 
-# Only Qdrant Cloud credentials are required. HF/LLM keys are optional.
-# Users configure their own keys in the browser Settings modal.
+# HF/LLM keys are optional. Users configure their own keys in browser settings.
 env:
-  QDRANT_URL: ${{ vars.QDRANT_URL }}
-  QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
   HF_API_KEY: ${{ secrets.HF_API_KEY }}
   DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
   DEV_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
@@ -36,10 +33,6 @@ env:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    outputs:
-      cluster_url: ${{ steps.outputs.outputs.cluster_url }}
-      cluster_key: ${{ steps.outputs.outputs.cluster_key }}
-      changed: ${{ steps.commit.outputs.changed }}
     defaults:
       run:
         working-directory: iac
@@ -69,13 +62,6 @@ jobs:
         continue-on-error: true
         run: terraform apply -auto-approve tfplan
 
-      - name: Read Terraform Outputs
-        id: outputs
-        if: always()
-        run: |
-          echo "cluster_url=$(terraform output -raw cluster_url 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
-          echo "cluster_key=$(terraform output -raw app_api_key 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
-
       - name: Commit Terraform State
         id: commit
         if: always()
@@ -101,7 +87,7 @@ jobs:
   sync:
     needs: terraform
     runs-on: ubuntu-latest
-    if: always() && (vars.QDRANT_URL != '' || needs.terraform.outputs.cluster_url != '')
+    if: always()
     defaults:
       run:
         working-directory: backend
@@ -109,28 +95,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Use terraform outputs if available, otherwise fall back to repo vars/secrets
-      - name: Set Qdrant credentials
+      - name: Read Qdrant credentials from Terraform state
         run: |
-          URL="${{ needs.terraform.outputs.cluster_url || vars.QDRANT_URL }}"
-          KEY="${{ needs.terraform.outputs.cluster_key || secrets.QDRANT_API_KEY }}"
-          if [ -n "$URL" ]; then
+          cd ../iac
+          terraform init -backend=false 2>/dev/null
+          URL=$(terraform output -raw cluster_url -state=terraform.tfstate 2>/dev/null || echo '')
+          KEY=$(terraform output -raw app_api_key -state=terraform.tfstate 2>/dev/null || echo '')
+          # Fall back to repo vars/secrets if TF state has nothing
+          URL="${URL:-${{ vars.QDRANT_URL }}}"
+          KEY="${KEY:-${{ secrets.QDRANT_API_KEY }}}"
+          if [ -z "$URL" ]; then
+            echo "::warning::No QDRANT_URL available. Skipping sync."
+            echo "HAS_CREDENTIALS=false" >> $GITHUB_ENV
+          else
             echo "QDRANT_URL=$URL" >> $GITHUB_ENV
-          fi
-          if [ -n "$KEY" ]; then
             echo "QDRANT_API_KEY=$KEY" >> $GITHUB_ENV
+            echo "HAS_CREDENTIALS=true" >> $GITHUB_ENV
           fi
 
       - uses: actions/setup-python@v5
+        if: env.HAS_CREDENTIALS == 'true'
         with:
           python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
+        if: env.HAS_CREDENTIALS == 'true'
         run: pip install -r requirements.txt
 
       - name: Run Nostr sync
+        if: env.HAS_CREDENTIALS == 'true'
         id: sync
         continue-on-error: true
         run: |
@@ -141,7 +136,7 @@ jobs:
           python -m worker.runner sync $FULL_FLAG
 
       - name: Generate soul hints (optional — needs LLM_API_KEY)
-        if: env.DEV_LLM_KEY != ''
+        if: env.HAS_CREDENTIALS == 'true' && env.DEV_LLM_KEY != ''
         continue-on-error: true
         run: python -m worker.runner souls
 
