@@ -142,8 +142,10 @@ jobs:
 
       - name: Copy soul-hints to consumer-site
         if: always()
+        continue-on-error: true
         run: |
           if [ -f data/souls/hints.json ]; then
+            mkdir -p ../consumer-site/public
             cp data/souls/hints.json ../consumer-site/public/soul-hints.json
             echo "Copied soul-hints.json"
           fi
