@@ -148,10 +148,25 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          mkdir -p ../consumer-site/public
           if [ -f data/souls/hints.json ]; then
-            mkdir -p ../consumer-site/public
             cp data/souls/hints.json ../consumer-site/public/soul-hints.json
             echo "Copied soul-hints.json"
+          elif [ -n "$PUBKEYS" ]; then
+            # Fallback: generate minimal hints from PUBKEYS env var
+            python3 -c "
+          import json, os
+          pubkeys = [p.strip() for p in os.environ['PUBKEYS'].split(',') if p.strip()]
+          labels_raw = os.environ.get('PUBKEY_LABELS', '{}')
+          try: labels = json.loads(labels_raw)
+          except: labels = {}
+          micros = {pk: labels.get(pk, pk[:8]) for pk in pubkeys}
+          hints = {pk: labels.get(pk, pk[:8]) for pk in pubkeys}
+          out = {'hints': hints, 'micros': micros, 'labels': labels}
+          with open('../consumer-site/public/soul-hints.json', 'w') as f:
+            json.dump(out, f)
+          print(f'Generated fallback soul-hints.json with {len(pubkeys)} pubkeys')
+          "
           fi
 
       - name: Commit changes

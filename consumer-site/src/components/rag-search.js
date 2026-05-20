@@ -123,9 +123,21 @@ export function mountRagChat(container) {
       pubkeyMeta = await ragGetPubkeys();
       activePubkeys = new Set(pubkeyMeta.map(p => p.pubkey));
       renderUserChips();
+      loadNoteCounts(); // async, renders again when done
     } catch (e) {
       console.error('Failed to load pubkeys:', e);
     }
+  }
+
+  let pubkeyNoteCounts = {};
+
+  async function loadNoteCounts() {
+    if (!pubkeyMeta.length) return;
+    try {
+      const { countNotesPerPubkey } = await import('../api/rag.js');
+      pubkeyNoteCounts = await countNotesPerPubkey(pubkeyMeta.map(p => p.pubkey));
+      renderUserChips();
+    } catch { /* counts are optional */ }
   }
 
   function renderUserChips() {
@@ -135,11 +147,13 @@ export function mountRagChat(container) {
       chip.className = 'ia-user-chip ' + (activePubkeys.has(p.pubkey) ? 'active' : 'inactive');
       const name = p.label || p.name || p.pubkey.slice(0, 8);
       const initial = esc(name[0].toUpperCase());
+      const count = pubkeyNoteCounts[p.pubkey];
+      const countHtml = count !== undefined ? `<span class="ia-chip-count">${count}</span>` : '';
       const imgHtml = p.picture
         ? `<img src="${esc(p.picture)}" class="pfp-img"><span class="no-pfp">${initial}</span>`
         : `<span class="no-pfp">${initial}</span>`;
-      const tooltipHtml = p.micro ? `<div class="ia-chip-tooltip">${esc(p.micro)} <a href="${getBackendUrl()}/p/${esc(p.label || p.name)}" style="color:#6ee7b7;font-size:0.7rem" target="_blank">view profile →</a></div>` : '';
-      chip.innerHTML = imgHtml + `<span><a href="${getBackendUrl()}/p/${esc(p.label || p.name)}" target="_blank">${esc(name)}</a></span>` + tooltipHtml;
+      const tooltipHtml = p.micro ? `<div class="ia-chip-tooltip">${esc(p.micro)}</div>` : '';
+      chip.innerHTML = imgHtml + `<span>${esc(name)}</span>${countHtml}` + tooltipHtml;
       chip.onclick = () => {
         if (activePubkeys.has(p.pubkey)) {
           if (activePubkeys.size <= 1) return;

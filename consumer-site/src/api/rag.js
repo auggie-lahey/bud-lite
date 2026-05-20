@@ -114,6 +114,34 @@ export async function embedTexts(texts) {
 
 // ── Qdrant direct queries ───────────────────────────────────────
 
+/**
+ * Count notes per pubkey via Qdrant scroll (lightweight, no vectors needed).
+ */
+export async function countNotesPerPubkey(pubkeys) {
+  const { url, collection } = getQdrantConfig();
+  if (!url) return {};
+  const headers = qdrantHeaders();
+  const counts = {};
+  // Use scroll to count per pubkey (batch filter)
+  for (const pk of pubkeys) {
+    try {
+      const resp = await fetch(`${url}/collections/${collection}/points/count`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          filter: { must: [{ key: 'pubkey', match: { value: pk } }] },
+          exact: false,
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        counts[pk] = data.result?.count || 0;
+      }
+    } catch { /* skip */ }
+  }
+  return counts;
+}
+
 function qdrantHeaders() {
   const { apiKey } = getQdrantConfig();
   const h = { 'Content-Type': 'application/json' };
@@ -415,17 +443,20 @@ export async function ragGetSystemPrompt() {
  */
 export async function ragGetPubkeys() {
   try {
-    const resp = await fetch('/soul-hints.json');
+    const resp = await fetch(`${import.meta.env.BASE_URL}soul-hints.json`);
     if (!resp.ok) return [];
     const data = await resp.json();
     const micros = data.micros || {};
     const labels = data.labels || {};
-    return Object.entries(micros).map(([pk, micro]) => ({
+    // Support both full soul hints and minimal fallback (pubkeys without LLM summaries)
+    const pubkeys = Object.keys(micros);
+    if (!pubkeys.length) return [];
+    return pubkeys.map(pk => ({
       pubkey: pk,
       name: labels[pk] || pk.slice(0, 8),
       label: labels[pk] || '',
       picture: '', // Will be fetched from relays
-      micro,
+      micro: micros[pk] || '',
     }));
   } catch {
     return [];
