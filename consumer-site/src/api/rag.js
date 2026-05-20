@@ -36,7 +36,7 @@ function getQdrantConfig() {
   return {
     url: (s.qdrantUrl || deployed.url || '').replace(/\/$/, ''),
     apiKey: s.qdrantApiKey || deployed.readOnlyKey || '',
-    collection: s.qdrantCollection || 'nostr-rag',
+    collection: s.qdrantCollection || 'nostr_rag',
   };
 }
 
