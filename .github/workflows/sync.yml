@@ -97,10 +97,10 @@ jobs:
 
       - name: Read Qdrant credentials from Terraform state
         run: |
-          cd ../iac
-          terraform init -backend=false 2>/dev/null
-          URL=$(terraform output -raw cluster_url -state=terraform.tfstate 2>/dev/null || echo '')
-          KEY=$(terraform output -raw app_api_key -state=terraform.tfstate 2>/dev/null || echo '')
+          if [ -f ../iac/terraform.tfstate ]; then
+            URL=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('cluster_url',{}).get('value',''))" 2>/dev/null || echo '')
+            KEY=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('app_api_key',{}).get('value',''))" 2>/dev/null || echo '')
+          fi
           # Fall back to repo vars/secrets if TF state has nothing
           URL="${URL:-${{ vars.QDRANT_URL }}}"
           KEY="${KEY:-${{ secrets.QDRANT_API_KEY }}}"
