@@ -20,29 +20,26 @@ on:
 
 permissions:
   contents: write
-  id-token: write
-  actions: write
 
-# Only Qdrant credentials are required. HF/LLM keys are optional —
-# if set, enable faster remote embedding and soul generation.
+# Only Qdrant Cloud credentials are required. HF/LLM keys are optional.
 # Users configure their own keys in the browser Settings modal.
 env:
-  # Required: Qdrant cluster access
   QDRANT_URL: ${{ vars.QDRANT_URL }}
   QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
-  # Optional: faster embeddings (without this, uses free HF API tier)
   HF_API_KEY: ${{ secrets.HF_API_KEY }}
-  # Optional: soul generation (without this, soul step is skipped)
   DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
   DEV_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
   DEV_LLM_MODEL: ${{ vars.LLM_MODEL }}
-  # Config (not secrets)
   PUBKEYS: ${{ vars.PUBKEYS }}
   PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    outputs:
+      cluster_url: ${{ steps.outputs.outputs.cluster_url }}
+      cluster_key: ${{ steps.outputs.outputs.cluster_key }}
+      changed: ${{ steps.commit.outputs.changed }}
     defaults:
       run:
         working-directory: iac
@@ -70,34 +67,30 @@ jobs:
         id: apply
         if: steps.plan.outcome == 'success' && (github.event.inputs.apply_terraform == 'true' || github.event_name == 'schedule')
         continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Read Terraform Outputs
+        id: outputs
+        if: always()
         run: |
-          terraform apply -auto-approve tfplan
-          # Write outputs directly to GitHub vars/secrets (never logged)
-          CLUSTER_URL=$(terraform output -raw cluster_url 2>/dev/null || echo '')
-          CLUSTER_KEY=$(terraform output -raw app_api_key 2>/dev/null || echo '')
-          if [ -n "$CLUSTER_URL" ]; then
-            gh variable set QDRANT_URL --body "$CLUSTER_URL" -R "${{ github.repository }}"
-          fi
-          if [ -n "$CLUSTER_KEY" ]; then
-            gh secret set QDRANT_API_KEY --body "$CLUSTER_KEY" -R "${{ github.repository }}"
-          fi
-          if git diff --quiet terraform.tfstate 2>/dev/null; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+          echo "cluster_url=$(terraform output -raw cluster_url 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "cluster_key=$(terraform output -raw app_api_key 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
 
       - name: Commit Terraform State
-        if: always() && steps.apply.outputs.changed == 'true'
+        id: commit
+        if: always()
         run: |
           cd ..
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add iac/terraform.tfstate
-          git diff --staged --quiet || git commit -m "chore: update terraform state [skip ci]"
-          git push
+          if git diff --staged --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m "chore: update terraform state [skip ci]"
+            git push
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Terraform Plan Failed
         if: steps.plan.outcome == 'failure'
@@ -108,13 +101,25 @@ jobs:
   sync:
     needs: terraform
     runs-on: ubuntu-latest
-    if: always() && vars.QDRANT_URL != ''
+    if: always() && (vars.QDRANT_URL != '' || needs.terraform.outputs.cluster_url != '')
     defaults:
       run:
         working-directory: backend
 
     steps:
       - uses: actions/checkout@v4
+
+      # Use terraform outputs if available, otherwise fall back to repo vars/secrets
+      - name: Set Qdrant credentials
+        run: |
+          URL="${{ needs.terraform.outputs.cluster_url || vars.QDRANT_URL }}"
+          KEY="${{ needs.terraform.outputs.cluster_key || secrets.QDRANT_API_KEY }}"
+          if [ -n "$URL" ]; then
+            echo "QDRANT_URL=$URL" >> $GITHUB_ENV
+          fi
+          if [ -n "$KEY" ]; then
+            echo "QDRANT_API_KEY=$KEY" >> $GITHUB_ENV
+          fi
 
       - uses: actions/setup-python@v5
         with:
