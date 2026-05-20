@@ -17,7 +17,7 @@
   color-scheme: dark;
 }
 
-body { margin: 0; font-family: system-ui, sans-serif; }
+body { margin: 0; font-family: system-ui, sans-serif; background: var(--color-ia-bg); color: var(--color-ia-ink); }
 
 /* ── Grid layout ─────────────────────────────────────────────── */
 .ia-items-grid {

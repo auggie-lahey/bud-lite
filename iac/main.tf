@@ -52,10 +52,11 @@ data "qdrant-cloud_booking_packages" "available" {
 }
 
 locals {
-  # Pick the cheapest free-tier package (lowest CPU + RAM)
-  free_package = sort([
+  # Pick the free-tier package (price = 0). Free tier = 1GB RAM, 4GB disk.
+  free_package = [
     for p in data.qdrant-cloud_booking_packages.available.packages : p.id
-  ])[0]
+    if p.unit_int_price_per_hour == 0
+  ][0]
 }
 
 variable "qdrant_cloud_api_key" {
