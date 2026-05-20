@@ -448,14 +448,14 @@ export async function ragGetPubkeys() {
     const data = await resp.json();
     const micros = data.micros || {};
     const labels = data.labels || {};
-    // Support both full soul hints and minimal fallback (pubkeys without LLM summaries)
+    const pictures = data.pictures || {};
     const pubkeys = Object.keys(micros);
     if (!pubkeys.length) return [];
     return pubkeys.map(pk => ({
       pubkey: pk,
       name: labels[pk] || pk.slice(0, 8),
       label: labels[pk] || '',
-      picture: '', // Will be fetched from relays
+      picture: pictures[pk] || '',
       micro: micros[pk] || '',
     }));
   } catch {
