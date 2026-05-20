@@ -118,6 +118,12 @@ export function mountRagChat(container) {
   // ── Load system prompt ─────────────────────────────────────
   ragGetSystemPrompt().then(p => { cachedSystemPrompt = p; }).catch(() => {});
 
+  // ── Prompt for LLM key on load if missing ──────────────────
+  const keys = getKeyStatus();
+  if (!keys.llm) {
+    showKeyPrompt('llm');
+  }
+
   // ── User filter chips ──────────────────────────────────────
   async function loadPubkeys() {
     try {
@@ -343,9 +349,9 @@ export function mountRagChat(container) {
     const q = inputEl.value.trim();
     if (!q) return;
 
-    // Check for required keys
-    const keys = getKeyStatus();
-    if (isQuestion(q) && !keys.llm) {
+    // Re-check key in case user dismissed the prompt
+    const keysNow = getKeyStatus();
+    if (isQuestion(q) && !keysNow.llm) {
       const saved = await showKeyPrompt('llm');
       if (!saved) return;
     }
