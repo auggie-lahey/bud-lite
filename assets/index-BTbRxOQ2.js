@@ -203,7 +203,7 @@ ${c}`),d.push(`Based on the above context, answer this question: ${e}`);const f=
           </div>
         </div>
         ${h}`,r.appendChild(y)}c.style.display=v?"block":"none"}return d(),i.push(t.subscribe("exploreArchives",d)),function(){i.forEach(v=>{try{v()}catch{}})}}function Qn(e,t){const n=document.getElementById("ia-main");return n.innerHTML="",Mn(n),function(){n.innerHTML=""}}const st=300*1e3,W=Wt({user:null,items:[],exploreArchives:[],exploreCacheTime:0,exploreHasMore:!0,followedPubkeys:[],blossomBase:"",cacheTime:0,settings:G(),viewMode:localStorage.getItem("ia-view-mode")||"grid",listSort:localStorage.getItem("ia-list-sort")||"date-desc",currentRoute:null});document.documentElement.setAttribute("data-view",W.getState().viewMode);const Gn=document.getElementById("app");Gn.innerHTML=`
-  <div class="flex min-h-full flex-col">
+  <div class="flex h-screen flex-col overflow-hidden">
     <header class="border-b border-white/10 bg-[var(--color-ia-nav)]">
       <div class="mx-auto flex h-12 max-w-[1280px] items-center justify-between px-4">
         <a href="#/" class="flex items-center gap-2 text-white no-underline">
@@ -224,7 +224,7 @@ ${c}`),d.push(`Based on the above context, answer this question: ${e}`);const f=
         </nav>
       </div>
     </header>
-    <main id="ia-main" class="flex-1"></main>
+    <main id="ia-main" class="flex-1 overflow-y-auto"></main>
 
     <footer class="border-t border-[var(--color-ia-border)] py-4 text-center text-xs text-zinc-500">
       Internet Archive on nostr · kind:35128 manifests · Blossom storage
