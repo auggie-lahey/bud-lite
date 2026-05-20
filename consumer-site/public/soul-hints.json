@@ -1,4 +1,12 @@
 {
   "hints": {},
-  "micros": {}
+  "micros": {
+    "4d023ce9dfd75a7f3075b8e8e084008be17a1f750c63b5de721e6ef883adc765": "pubkey 1",
+    "5677fa5b6b1cb6d5bee785d088a904cd08082552bf75df3e4302cea015a5d3e1": "pubkey 2",
+    "d3646691ba5b1d796c1e1b3430df00fe1189ec9c232877adde18c8f656af18f0": "pubkey 3",
+    "efe5d120df0cc290fa748727fb45ac487caad346d4f2293ab069e8f01fc51981": "pubkey 4",
+    "b83a28b7e4e5d20bd960c5faeb6625f95529166b8bdb045d42634a2f35919450": "pubkey 5",
+    "a136247d8caf7e30bf403d32006faeca0c9d1cec7a16075e4142c2fed6cade60": "pubkey 6"
+  },
+  "labels": {}
 }
