@@ -41,6 +41,11 @@ resource "qdrant-cloud_accounts_database_api_key_v2" "app_key" {
   name       = "github-actions-sync"
 }
 
+resource "qdrant-cloud_accounts_database_api_key_v2" "read_only_key" {
+  cluster_id = qdrant-cloud_accounts_cluster.nostr_rag.id
+  name       = "consumer-site-read-only"
+}
+
 data "qdrant-cloud_booking_packages" "available" {
   cloud_provider = "aws"
   cloud_region   = "us-east-1"
@@ -76,5 +81,10 @@ output "cluster_id" {
 
 output "app_api_key" {
   value     = qdrant-cloud_accounts_database_api_key_v2.app_key.key
+  sensitive = true
+}
+
+output "read_only_key" {
+  value     = qdrant-cloud_accounts_database_api_key_v2.read_only_key.key
   sensitive = true
 }

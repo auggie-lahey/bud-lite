@@ -5,13 +5,37 @@
 
 import { getSettings } from '../core/settings.js';
 
+// ── Deployed config (auto-loaded from TF outputs) ────────────────
+
+let _deployedConfig = null;
+
+/**
+ * Load deployed config from /qdrant-config.json (written by CI).
+ * User's localStorage settings always override these defaults.
+ */
+export async function loadDeployedConfig() {
+  try {
+    const resp = await fetch(`${import.meta.env.BASE_URL}qdrant-config.json`);
+    if (resp.ok) {
+      _deployedConfig = await resp.json();
+    }
+  } catch {
+    // File doesn't exist in dev — that's fine
+  }
+}
+
+function getDeployedQdrant() {
+  return _deployedConfig || {};
+}
+
 // ── Config helpers ─────────────────────────────────────────────
 
 function getQdrantConfig() {
   const s = getSettings();
+  const deployed = getDeployedQdrant();
   return {
-    url: (s.qdrantUrl || '').replace(/\/$/, ''),
-    apiKey: s.qdrantApiKey || '',
+    url: (s.qdrantUrl || deployed.url || '').replace(/\/$/, ''),
+    apiKey: s.qdrantApiKey || deployed.readOnlyKey || '',
     collection: s.qdrantCollection || 'nostr-rag',
   };
 }

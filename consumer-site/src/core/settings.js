@@ -8,9 +8,9 @@ const DEFAULTS = {
   blossomMirror: 'https://nostr.download',
   relays: 'wss://nos.lol, wss://relay.damus.io, wss://relay.ngit.dev',
   manifestDtag: 'archive',
-  ragBackendUrl: 'http://localhost:8080',
-  // Qdrant — direct browser access
-  qdrantUrl: 'http://localhost:6333',
+  ragBackendUrl: '',
+  // Qdrant — auto-configured from deployed config or manual entry
+  qdrantUrl: '',
   qdrantApiKey: '',
   qdrantCollection: 'nostr-rag',
   // API keys — stored in browser only, sent per-request

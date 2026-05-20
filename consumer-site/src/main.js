@@ -13,6 +13,7 @@ import { parseManifestContent, extractManifestItems } from './api/manifest.js';
 import { fetchMetadataBatch } from './api/metadata.js';
 import { fetchFollowList } from './api/contacts.js';
 import { mountLoginWidget } from './components/login-widget.js';
+import { loadDeployedConfig } from './api/rag.js';
 import { mountSettingsModal } from './components/settings-modal.js';
 import { mountIngestPanel } from './components/ingest-panel.js';
 import { mountArchiveBrowser } from './components/archive-browser.js';
@@ -529,6 +530,9 @@ async function onUserChange(user) {
 
 // Subscribe to user state
 store.subscribe('user', onUserChange);
+
+// Load deployed Qdrant config (from TF outputs baked into the build)
+loadDeployedConfig();
 
 // Initial load
 if (store.getState().user) {

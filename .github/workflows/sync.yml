@@ -100,6 +100,7 @@ jobs:
           if [ -f ../iac/terraform.tfstate ]; then
             URL=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('cluster_url',{}).get('value',''))" 2>/dev/null || echo '')
             KEY=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('app_api_key',{}).get('value',''))" 2>/dev/null || echo '')
+            READ_KEY=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('read_only_key',{}).get('value',''))" 2>/dev/null || echo '')
           fi
           # Fall back to repo vars/secrets if TF state has nothing
           URL="${URL:-${{ vars.QDRANT_URL }}}"
@@ -110,7 +111,10 @@ jobs:
           else
             echo "QDRANT_URL=$URL" >> $GITHUB_ENV
             echo "QDRANT_API_KEY=$KEY" >> $GITHUB_ENV
+            echo "QDRANT_READ_KEY=${READ_KEY:-$KEY}" >> $GITHUB_ENV
             echo "HAS_CREDENTIALS=true" >> $GITHUB_ENV
+            # Write config for consumer-site (baked into build)
+            echo "{\"url\":\"$URL\",\"readOnlyKey\":\"${READ_KEY:-$KEY}\"}" > ../consumer-site/public/qdrant-config.json
           fi
 
       - uses: actions/setup-python@v5
@@ -167,10 +171,13 @@ jobs:
       - name: Build and deploy consumer-site
         if: always()
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd ../consumer-site
           npm ci
-          npm run deploy
+          npx vite build
+          npx gh-pages -d dist -u "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
 
   notify:
     needs: [terraform, sync]
