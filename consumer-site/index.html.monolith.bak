@@ -1,0 +1,3113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Internet Archive (nostr)</title>
+    <!-- Legacy React bundle (GRASP/kind:1116) — moved to _legacy_react/assets/ -->
+    <!-- <script type="module" crossorigin src="/assets/index-B0aMyXqc.js"></script> -->
+    <link rel="stylesheet" crossorigin href="/_legacy_react/assets/index-Bu7iWp5P.css">
+    <style>
+      /* CSS variables matching React app's Tailwind theme */
+      :root {
+        --color-ia-ink: #222;
+        --color-ia-bg: #fff;
+        --color-ia-bg-soft: #f4f4f4;
+        --color-ia-border: #d6d6d6;
+        --color-ia-nav: #2c2c2c;
+        --color-ia-nav-hover: #444;
+        --color-ia-link: #428bca;
+        --color-ia-link-hover: #2a6496;
+        --color-ia-accent: #fcb441;
+        --color-ia-accent-strong: #f0a020;
+        --color-ia-good: #5cb85c;
+        --color-ia-bad: #d9534f;
+        color-scheme: light;
+      }
+      body { margin: 0; }
+
+      /* Floating ingest button */
+      #ingest-fab {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 9998;
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: var(--ingest-accent, #6ee7b7);
+        color: #111;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.15s, opacity 0.15s;
+      }
+      #ingest-fab:hover { transform: scale(1.1); }
+      #ingest-fab.hidden { display: none; }
+
+      /* Modal overlay */
+      #ingest-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+      }
+      #ingest-overlay.hidden { display: none; }
+
+      /* Ingestion panel (inside modal) */
+      #ingest-section {
+        width: 95%;
+        max-width: 560px;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 1.5em;
+        background: #1a1a2e;
+        border: 1px solid #333;
+        border-radius: 10px;
+        color: #ddd;
+        font-family: system-ui, sans-serif;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      }
+      #ingest-section h2 {
+        margin: 0 0 0.5em;
+        color: #6ee7b7;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      #ingest-close {
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 1.4rem;
+        cursor: pointer;
+        padding: 0 0.3em;
+        line-height: 1;
+      }
+      #ingest-close:hover { color: #f87171; }
+      #ingest-section .hint { color: #888; font-size: 0.85rem; margin-bottom: 1em; }
+      #ingest-form label { display: block; margin-bottom: 0.8em; font-size: 0.9rem; }
+      #ingest-form input[type="url"],
+      #ingest-form input[type="text"],
+      #ingest-form select {
+        width: 100%; padding: 0.5em; margin-top: 0.25em;
+        background: #0e0f12; border: 1px solid #2a2d34; border-radius: 4px;
+        color: #d8dadf; font-size: 0.95rem;
+      }
+      .ingest-row { display: flex; gap: 1em; }
+      .ingest-row label { flex: 1; }
+      .checkbox-label { display: flex; align-items: center; gap: 0.5em; }
+      .checkbox-label input[type="checkbox"] { margin: 0; }
+      #ingest-btn {
+        padding: 0.6em 1.5em; margin-top: 0.5em;
+        background: #6ee7b7; color: #111;
+        border: none; border-radius: 4px; font-size: 1rem; cursor: pointer;
+        font-weight: 600;
+      }
+      #ingest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .ingest-step {
+        display: flex; align-items: center; gap: 0.5em;
+        padding: 0.2em 0; font-size: 0.88rem;
+      }
+      .ingest-step-icon { width: 1.2em; text-align: center; font-weight: bold; }
+      .ingest-step-label { min-width: 10em; }
+      .ingest-step-detail { color: #888; font-family: monospace; font-size: 0.8rem; }
+      .ingest-step-pending .ingest-step-icon,
+      .ingest-step-pending .ingest-step-label { color: #666; }
+      .ingest-step-running .ingest-step-icon { color: #fbbf24; }
+      .ingest-step-running .ingest-step-label { color: #ddd; }
+      .ingest-step-done .ingest-step-icon { color: #6ee7b7; }
+      .ingest-step-done .ingest-step-label { color: #ddd; }
+      .ingest-step-error .ingest-step-icon,
+      .ingest-step-error .ingest-step-label { color: #f87171; }
+      #ingest-current {
+        margin-top: 0.5em; font-family: monospace;
+        font-size: 0.85rem; color: #6ee7b7;
+      }
+
+      /* Grid/List view toggle */
+      .ia-view-toggle {
+        display: inline-flex;
+        border: 1px solid var(--color-ia-border, #d1d5db);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-left: 0.75rem;
+        vertical-align: middle;
+      }
+      .ia-view-toggle button {
+        background: white;
+        border: none;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .ia-view-toggle button + button { border-left: 1px solid var(--color-ia-border, #d1d5db); }
+      .ia-view-toggle button.active { background: var(--color-ia-nav, #333); color: white; }
+      .ia-view-toggle button:hover:not(.active) { background: #f3f4f6; }
+
+      /* List mode — file explorer table */
+      html[data-view="list"] .ia-items-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      html[data-view="list"] .ia-items-grid > a {
+        display: grid !important;
+        grid-template-columns: 1fr 90px 70px 110px !important;
+        align-items: center !important;
+        gap: 0 !important;
+        padding: 5px 12px !important;
+        border-radius: 0 !important;
+        border-width: 0 0 1px 0 !important;
+        aspect-ratio: unset !important;
+        font-size: 12px !important;
+      }
+      html[data-view="list"] .ia-items-grid > a:last-child { border-bottom: none; }
+      html[data-view="list"] .ia-items-grid > a:hover {
+        background: #f0f7ff !important;
+        box-shadow: none !important;
+      }
+      /* Hide thumbnail in list mode */
+      html[data-view="list"] .ia-items-grid > a > div:first-child { display: none !important; }
+      /* Text container: use display contents to promote children to grid */
+      html[data-view="list"] .ia-items-grid > a > div:nth-child(2) {
+        display: contents !important;
+      }
+      /* Hide everything except h3 and .ia-card-meta in list mode */
+      html[data-view="list"] .ia-items-grid > a > div:nth-child(2) > :not(h3):not(.ia-card-meta) { display: none !important; }
+      /* Hide size in grid mode */
+      .ia-card-size { display: none; }
+      /* List mode — file explorer table */
+      html[data-view="list"] .ia-items-grid > a h3 {
+        grid-column: 1;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1.4 !important;
+        -webkit-line-clamp: 1 !important;
+        line-clamp: 1 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+      }
+      /* Meta row: make items span their own grid cells */
+      html[data-view="list"] .ia-card-meta {
+        display: contents !important;
+        margin: 0 !important;
+      }
+      html[data-view="list"] .ia-card-size {
+        display: block !important;
+        grid-column: 2;
+        text-align: right;
+        color: #666;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      html[data-view="list"] .ia-card-type {
+        display: block !important;
+        grid-column: 3;
+        text-align: center;
+        font-size: 10px !important;
+      }
+      html[data-view="list"] .ia-card-date {
+        display: block !important;
+        grid-column: 4;
+        text-align: right;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      /* List header row */
+      .ia-list-header {
+        display: grid;
+        grid-template-columns: 1fr 90px 70px 110px;
+        padding: 5px 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        border-bottom: 2px solid #d1d5db;
+        background: #f9fafb;
+        border-radius: 4px 4px 0 0;
+      }
+      .ia-list-header span:nth-child(2),
+      .ia-list-header span:nth-child(4) { text-align: right; }
+      .ia-list-header span:nth-child(3) { text-align: center; }
+      .ia-list-header span { cursor: pointer; user-select: none; }
+      .ia-list-header span:hover { color: #111; }
+      .ia-list-header .sort-asc::after { content: " \u25B2"; font-size: 9px; }
+      .ia-list-header .sort-desc::after { content: " \u25BC"; font-size: 9px; }
+
+      /* Kebab menu */
+      .ia-kebab {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        z-index: 20;
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.85);
+        border: 1px solid #d1d5db;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        line-height: 1;
+        color: #555;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      a:hover > .ia-kebab,
+      .ia-kebab.ia-kebab-open { opacity: 1; }
+      .ia-kebab:hover, .ia-kebab.ia-kebab-open { background: #fff; color: #111; }
+      /* List mode: kebab sits on the card row */
+      html[data-view="list"] .ia-kebab {
+        top: 50%;
+        left: auto;
+        right: 4px;
+        transform: translateY(-50%);
+      }
+      /* List mode: dropdown repositioned */
+      html[data-view="list"] .ia-dropdown {
+        top: auto;
+        left: auto;
+        right: 4px;
+        bottom: -4px;
+        transform: translateY(100%);
+      }
+      .ia-dropdown {
+        position: absolute;
+        top: 28px;
+        left: 4px;
+        z-index: 30;
+        min-width: 180px;
+        background: #fff;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        padding: 4px 0;
+        font-size: 13px;
+        font-family: system-ui, sans-serif;
+      }
+      .ia-dropdown-item {
+        display: block;
+        width: 100%;
+        padding: 7px 14px;
+        text-align: left;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #333;
+        font-size: 13px;
+      }
+      .ia-dropdown-item:hover { background: #f3f4f6; }
+      .ia-dropdown-item.ia-danger { color: #dc2626; }
+      .ia-dropdown-item.ia-danger:hover { background: #fef2f2; }
+      .ia-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1a1a2e;
+        color: #6ee7b7;
+        padding: 8px 18px;
+        border-radius: 6px;
+        font-size: 13px;
+        z-index: 99999;
+        pointer-events: none;
+        animation: ia-toast-fade 1.5s forwards;
+      }
+      @keyframes ia-toast-fade {
+        0% { opacity: 1; }
+        70% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      /* Raw JSON modal */
+      #ia-raw-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 99998;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+      }
+      #ia-raw-modal.hidden { display: none; }
+      #ia-raw-content {
+        width: 90%;
+        max-width: 700px;
+        max-height: 80vh;
+        overflow: auto;
+        background: #1a1a2e;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1.2em;
+        color: #d8dadf;
+        font-family: monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        position: relative;
+      }
+      #ia-raw-close {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 1.3rem;
+        cursor: pointer;
+      }
+      #ia-raw-close:hover { color: #f87171; }
+
+      /* Settings gear icon */
+      #ia-settings-fab {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 5rem;
+        z-index: 9998;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.85);
+        border: 1px solid #d1d5db;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: #555;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      }
+      #ia-settings-fab:hover { background: #fff; color: #111; }
+
+      /* Settings modal */
+      #ia-settings-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+      }
+      #ia-settings-overlay.hidden { display: none; }
+      #ia-settings-panel {
+        width: 95%;
+        max-width: 500px;
+        max-height: 85vh;
+        overflow-y: auto;
+        padding: 1.5em;
+        background: #1a1a2e;
+        border: 1px solid #333;
+        border-radius: 10px;
+        color: #ddd;
+        font-family: system-ui, sans-serif;
+      }
+      #ia-settings-panel h2 { margin: 0 0 0.5em; color: #6ee7b7; display: flex; align-items: center; justify-content: space-between; }
+      #ia-settings-panel label { display: block; margin-bottom: 0.8em; font-size: 0.9rem; }
+      #ia-settings-panel input, #ia-settings-panel select {
+        width: 100%; padding: 0.5em; margin-top: 0.25em;
+        background: #0e0f12; border: 1px solid #2a2d34; border-radius: 4px;
+        color: #d8dadf; font-size: 0.95rem;
+      }
+      #ia-settings-panel .hint { color: #888; font-size: 0.8rem; margin-top: 0.2em; }
+      #ia-settings-save { padding: 0.6em 1.5em; background: #6ee7b7; color: #111; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; font-weight: 600; }
+      #ia-settings-save:hover { background: #5dd6a7; }
+
+      /* File upload tab */
+      .ingest-tabs { display: flex; gap: 0; margin-bottom: 1em; }
+      .ingest-tab {
+        flex: 1; padding: 0.5em; text-align: center; cursor: pointer;
+        background: #0e0f12; border: 1px solid #2a2d34; color: #888;
+        font-size: 0.9rem;
+      }
+      .ingest-tab:first-child { border-radius: 4px 0 0 4px; }
+      .ingest-tab:last-child { border-radius: 0 4px 4px 0; }
+      .ingest-tab.active { background: #2a2d34; color: #6ee7b7; }
+      .ingest-panel { display: none; }
+      .ingest-panel.active { display: block; }
+      #ingest-file-drop {
+        border: 2px dashed #2a2d34; border-radius: 8px; padding: 2em;
+        text-align: center; cursor: pointer; color: #666; font-size: 0.9rem;
+        transition: border-color 0.2s;
+      }
+      #ingest-file-drop:hover, #ingest-file-drop.dragover { border-color: #6ee7b7; color: #6ee7b7; }
+
+      /* Archive browser */
+      #ia-archive-overlay {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(0,0,0,0.6);
+        display: flex; align-items: center; justify-content: center;
+        backdrop-filter: blur(4px);
+      }
+      #ia-archive-overlay.hidden { display: none; }
+      #ia-archive-section {
+        width: 95%; max-width: 640px; max-height: 85vh; overflow-y: auto;
+        padding: 1.5em; background: #1a1a2e; border: 1px solid #333;
+        border-radius: 10px; color: #ddd; font-family: system-ui, sans-serif;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      }
+      #ia-archive-section h2 { margin: 0 0 0.5em; color: #6ee7b7; display: flex; align-items: center; justify-content: space-between; }
+      .ia-tree-folder { margin: 0.3em 0; }
+      .ia-tree-folder-header {
+        cursor: pointer; padding: 0.3em 0.5em; border-radius: 4px;
+        font-weight: 600; color: #93c5fd; font-size: 0.9rem;
+      }
+      .ia-tree-folder-header:hover { background: rgba(255,255,255,0.05); }
+      .ia-tree-folder-header::before { content: "\25B6 "; font-size: 0.7em; transition: transform 0.15s; display: inline-block; }
+      .ia-tree-folder.open > .ia-tree-folder-header::before { transform: rotate(90deg); }
+      .ia-tree-folder-children { padding-left: 1.2em; display: none; }
+      .ia-tree-folder.open > .ia-tree-folder-children { display: block; }
+      .ia-tree-item {
+        padding: 0.25em 0.5em; font-size: 0.85rem; color: #d1d5db;
+        cursor: pointer; border-radius: 3px; display: flex; justify-content: space-between; align-items: center;
+      }
+      .ia-tree-item:hover { background: rgba(255,255,255,0.05); }
+      .ia-tree-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+      .ia-tree-item-meta { color: #666; font-size: 0.75rem; margin-left: 0.5em; white-space: nowrap; }
+      .ia-tree-empty { color: #666; font-size: 0.85rem; padding: 1em; text-align: center; }
+      #ia-archive-fab {
+        position: fixed; bottom: 1.5rem; right: 9rem; z-index: 9998;
+        width: 40px; height: 40px; border-radius: 50%;
+        background: rgba(255,255,255,0.85); border: 1px solid #d1d5db;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        font-size: 1.1rem; color: #555; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      }
+      #ia-archive-fab:hover { background: #fff; color: #111; }
+
+      /* Login widget */
+      #ia-login-widget {
+        position: fixed;
+        top: 0.75rem;
+        right: 0.75rem;
+        z-index: 9997;
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        padding: 0.4em 0.8em;
+        background: rgba(26, 26, 46, 0.92);
+        border: 1px solid #333;
+        border-radius: 8px;
+        backdrop-filter: blur(8px);
+        font-family: system-ui, sans-serif;
+        font-size: 0.85rem;
+        color: #ddd;
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+      #ia-login-widget:hover { border-color: #6ee7b7; }
+      #ia-login-pfp {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #2a2d34;
+        object-fit: cover;
+      }
+      #ia-login-name {
+        max-width: 140px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 600;
+        color: #6ee7b7;
+      }
+      #ia-login-prompt {
+        color: #888;
+        font-size: 0.8rem;
+      }
+      #ia-login-prompt:hover { color: #6ee7b7; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="flex min-h-full flex-col">
+        <header class="border-b border-white/10 bg-[var(--color-ia-nav)]">
+          <div class="mx-auto flex h-12 max-w-[1280px] items-center justify-between px-4">
+            <a href="#/" class="flex items-center gap-2 text-white hover:no-underline">
+              <span class="text-lg font-bold tracking-tight">IA</span>
+              <span class="text-sm text-white/75">Internet Archive</span>
+              <span class="text-xs text-white/55">on nostr</span>
+            </a>
+            <nav id="ia-nav-collections" class="flex gap-4">
+              <a href="#/collection/texts" class="text-sm text-white/75 hover:text-white hover:no-underline">Texts</a>
+              <a href="#/collection/images" class="text-sm text-white/75 hover:text-white hover:no-underline">Images</a>
+              <a href="#/collection/audio" class="text-sm text-white/75 hover:text-white hover:no-underline">Audio</a>
+              <a href="#/collection/video" class="text-sm text-white/75 hover:text-white hover:no-underline">Video</a>
+              <a href="#/collection/software" class="text-sm text-white/75 hover:text-white hover:no-underline">Software</a>
+              <a href="#/collection/web" class="text-sm text-white/75 hover:text-white hover:no-underline">Web</a>
+              <a href="#/about" class="text-sm text-white/75 hover:text-white hover:no-underline">About</a>
+            </nav>
+          </div>
+        </header>
+        <main id="ia-main" class="flex-1"></main>
+        <footer class="border-t border-[var(--color-ia-border)] py-4 text-center text-xs text-zinc-500">
+          Internet Archive on nostr · kind:35128 manifests · Blossom storage
+        </footer>
+      </div>
+    </div>
+
+    <!-- Login widget -->
+    <div id="ia-login-widget" title="Click to login">
+      <div id="ia-login-prompt">Login</div>
+    </div>
+
+    <!-- Raw JSON viewer modal -->
+    <div id="ia-raw-modal" class="hidden">
+      <div id="ia-raw-content">
+        <button id="ia-raw-close">&times;</button>
+        <pre id="ia-raw-json"></pre>
+      </div>
+    </div>
+
+    <!-- Floating action button -->
+    <button id="ingest-fab" class="hidden" title="Archive a URL">+</button>
+
+    <!-- My Archive button -->
+    <button id="ia-archive-fab" class="hidden" title="My Archive">&#128193;</button>
+
+    <!-- Settings gear -->
+    <button id="ia-settings-fab" title="Settings">&#9881;</button>
+
+    <!-- Settings modal -->
+    <div id="ia-settings-overlay" class="hidden">
+      <div id="ia-settings-panel">
+        <h2>Settings <button id="ia-settings-close" style="background:none;border:none;color:#888;font-size:1.4rem;cursor:pointer">&times;</button></h2>
+        <form id="ia-settings-form">
+          <label>
+            Default archiver npub
+            <input type="text" id="set-archiver-npub">
+          </label>
+          <label>
+            Blossom server
+            <input type="text" id="set-blossom-url" placeholder="https://blossom.primal.net">
+          </label>
+          <label>
+            Blossom mirror
+            <input type="text" id="set-blossom-mirror" placeholder="https://nostr.download">
+          </label>
+          <label>
+            Relays (comma-separated)
+            <input type="text" id="set-relays" placeholder="wss://nos.lol, wss://relay.damus.io">
+          </label>
+          <label>
+            Manifest d-tag
+            <input type="text" id="set-manifest-dtag" placeholder="archive">
+            <div class="hint">Identifier for your personal archive nsite (kind:35128)</div>
+          </label>
+          <button type="submit" id="ia-settings-save">Save Settings</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal overlay (hidden by default) -->
+    <div id="ingest-overlay" class="hidden">
+      <section id="ingest-section">
+        <h2>
+          Archive
+          <button id="ingest-close" type="button">&times;</button>
+        </h2>
+        <div class="ingest-tabs">
+          <div class="ingest-tab active" data-tab="url">Flag URL</div>
+          <div class="ingest-tab" data-tab="file">Upload File</div>
+          <div class="ingest-tab" data-tab="sync">Sync Folder</div>
+        </div>
+        <form id="ingest-form">
+          <!-- URL tab -->
+          <div class="ingest-panel active" id="ingest-panel-url">
+            <p class="hint">Flag a URL for archiving. Publishes a kind 1621 event to signal intent. Requires NIP-07 login (nos2x, Alby, etc).</p>
+            <label>
+              URL to archive
+              <input type="url" id="ingest-url" placeholder="https://example.com/file.pdf">
+            </label>
+          </div>
+          <!-- File upload tab -->
+          <div class="ingest-panel" id="ingest-panel-file">
+            <p class="hint">Upload a file directly from your browser. Signed with your Nostr identity.</p>
+            <div id="ingest-file-drop">
+              <div>Drop a file here or click to browse</div>
+              <input type="file" id="ingest-file-input" style="display:none">
+            </div>
+            <div id="ingest-file-name" style="color:#6ee7b7;font-size:0.85rem;margin-top:0.5em"></div>
+          </div>
+          <!-- Folder sync tab -->
+          <div class="ingest-panel" id="ingest-panel-sync">
+            <p class="hint">Select a local folder to sync to your archive. Only new or changed files are uploaded. Folder name is saved so you can re-sync later.</p>
+            <div id="ingest-sync-drop" style="border:2px dashed #2a2d34;border-radius:8px;padding:1.5em;text-align:center;cursor:pointer;color:#666;font-size:0.9rem;transition:border-color 0.2s">
+              <div style="font-size:1.5em;margin-bottom:0.3em">&#128193;</div>
+              <div>Click to select a folder</div>
+              <input type="file" id="ingest-folder-input" webkitdirectory multiple style="display:none">
+            </div>
+            <div id="ingest-sync-info" style="color:#93c5fd;font-size:0.85rem;margin-top:0.5em"></div>
+            <div id="ingest-sync-stored" style="display:none;color:#555;font-size:0.75rem;margin-top:0.2em"></div>
+            <div id="ingest-sync-diff" style="margin-top:0.5em;font-size:0.8rem;max-height:150px;overflow-y:auto"></div>
+            <div style="display:flex;align-items:center;gap:1em;margin-top:0.5em">
+              <button type="button" id="ingest-sync-btn" style="display:none;padding:0.6em 1.5em;background:#6ee7b7;color:#111;border:none;border-radius:4px;font-size:1rem;cursor:pointer;font-weight:600">Sync to Archive</button>
+              <label style="display:none;align-items:center;gap:0.4em;font-size:0.8rem;color:#888;cursor:pointer" id="ingest-sync-force-label">
+                <input type="checkbox" id="ingest-sync-force"> Force re-sync all
+              </label>
+            </div>
+          </div>
+          <!-- Common fields -->
+          <div class="ingest-row">
+            <label>
+              Title
+              <input type="text" id="ingest-title" placeholder="(optional)">
+            </label>
+            <label>
+              Folder path
+              <input type="text" id="ingest-folder" placeholder="texts/my-folder">
+            </label>
+          </div>
+          <div class="ingest-row">
+            <label>
+              Source kind
+              <select id="ingest-source-kind">
+                <option value="">— none —</option>
+                <option value="webpage">webpage</option>
+                <option value="document/pdf">document/pdf</option>
+                <option value="audio/podcast">audio/podcast</option>
+                <option value="audio/music">audio/music</option>
+                <option value="video">video</option>
+                <option value="image">image</option>
+                <option value="software">software</option>
+                <option value="text/book">text/book</option>
+              </select>
+            </label>
+            <label>
+              Topics <span style="color:#888;font-size:0.8rem">(comma-separated)</span>
+              <input type="text" id="ingest-topics" placeholder="bitcoin, nostr">
+            </label>
+          </div>
+          <div class="ingest-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="ingest-skip-ots" checked>
+              Skip OTS timestamping (faster)
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="ingest-transcribe">
+              Transcribe audio (whisper)
+            </label>
+          </div>
+          <button type="submit" id="ingest-btn">Archive this URL</button>
+        </form>
+        <div id="ingest-progress" style="display:none;">
+          <div id="ingest-steps"></div>
+          <div id="ingest-current"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Archive browser overlay -->
+    <div id="ia-archive-overlay" class="hidden">
+      <section id="ia-archive-section">
+        <h2>
+          <span>My Archive</span>
+          <button id="ia-archive-close" type="button" style="background:none;border:none;color:#888;font-size:1.4rem;cursor:pointer">&times;</button>
+        </h2>
+        <div style="display:flex;gap:0.5em;margin-bottom:1em">
+          <button id="ia-archive-sync-btn" type="button" style="padding:0.5em 1em;background:#6ee7b7;color:#111;border:none;border-radius:4px;font-size:0.85rem;cursor:pointer;font-weight:600">Sync Folder</button>
+          <span id="ia-archive-status" style="color:#888;font-size:0.85rem;display:flex;align-items:center">Loading...</span>
+        </div>
+        <div id="ia-archive-tree"></div>
+      </section>
+    </div>
+
+    <script type="module">
+      // --- Login widget: NIP-07 identity + kind:0 metadata ---
+      (function() {
+        const widget = document.getElementById("ia-login-widget");
+        let currentUser = null; // { pubkey, name, picture, about, nip05 }
+
+        // Fetch kind:0 metadata from relays
+        async function fetchMetadata(pubkey) {
+          const relays = ["wss://nos.lol", "wss://relay.damus.io", "wss://relay.nostr.band"];
+          const filter = { kinds: [0], authors: [pubkey], limit: 1 };
+          for (const url of relays) {
+            try {
+              const ws = new WebSocket(url);
+              const ev = await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => { ws.close(); reject("timeout"); }, 4000);
+                ws.onopen = () => ws.send(JSON.stringify(["REQ", "meta-" + Date.now(), filter]));
+                ws.onmessage = (msg) => {
+                  const data = JSON.parse(msg.data);
+                  if (data[0] === "EVENT" && data[2]) { clearTimeout(timeout); ws.close(); resolve(data[2]); }
+                  if (data[0] === "EOSE") { clearTimeout(timeout); ws.close(); resolve(null); }
+                };
+                ws.onerror = () => { clearTimeout(timeout); reject("ws error"); };
+              });
+              if (ev) {
+                try {
+                  const meta = JSON.parse(ev.content);
+                  return { name: meta.name || meta.display_name, picture: meta.picture, about: meta.about, nip05: meta.nip05 };
+                } catch {}
+              }
+            } catch { continue; }
+          }
+          return null;
+        }
+
+        function escHtml(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+        function escAttr(s) { return (s || "").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+        // Update the widget UI
+        function renderWidget() {
+          if (!currentUser) {
+            widget.innerHTML = '<div id="ia-login-prompt">Login</div>';
+            widget.title = "Click to login with NIP-07";
+            return;
+          }
+          const pfpHtml = currentUser.picture
+            ? `<img id="ia-login-pfp" src="${escAttr(currentUser.picture)}" onerror="this.outerHTML='<div id=\\'ia-login-pfp\\' style=\\'display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#6ee7b7\\'>&#9786;</div>'">`
+            : `<div id="ia-login-pfp" style="display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#6ee7b7">&#9786;</div>`;
+          const name = currentUser.name || currentUser.pubkey.slice(0, 12) + "...";
+          widget.innerHTML = `${pfpHtml}<div id="ia-login-name">${escHtml(name)}</div><div style="color:#555;font-size:0.7rem;margin-left:0.3em;cursor:pointer" id="ia-logout-btn" title="Logout">&#10005;</div>`;
+          widget.title = `${currentUser.name || "Anonymous"}\n${currentUser.pubkey.slice(0, 16)}...`;
+
+          // Logout handler
+          document.getElementById("ia-logout-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            logout();
+          });
+        }
+
+        // Login
+        async function login() {
+          if (!window.nostr || !window.nostr.getPublicKey) {
+            alert("No NIP-07 signer found. Install nos2x or Alby browser extension.");
+            return;
+          }
+          try {
+            const pubkey = await window.nostr.getPublicKey();
+            currentUser = { pubkey };
+            renderWidget();
+
+            // Fetch metadata in background
+            const meta = await fetchMetadata(pubkey);
+            if (meta) {
+              currentUser = { ...currentUser, ...meta };
+              renderWidget();
+            }
+
+            // Show archive + ingest FABs now that we're logged in
+            document.getElementById("ia-archive-fab").classList.remove("hidden");
+            document.getElementById("ingest-fab").classList.remove("hidden");
+          } catch (e) {
+            console.warn("Login failed:", e);
+          }
+        }
+
+        // Logout
+        function logout() {
+          currentUser = null;
+          renderWidget();
+          document.getElementById("ia-archive-fab").classList.add("hidden");
+          document.getElementById("ingest-fab").classList.add("hidden");
+          // Close any open panels
+          document.getElementById("ia-archive-overlay").classList.add("hidden");
+          document.getElementById("ingest-overlay").classList.add("hidden");
+        }
+
+        widget.addEventListener("click", () => {
+          if (currentUser) return; // already logged in, use logout button
+          login();
+        });
+
+        // Auto-detect NIP-07 on load
+        function checkNip07() {
+          if (window.nostr && window.nostr.getPublicKey) {
+            login();
+            return true;
+          }
+          return false;
+        }
+
+        // Try immediately, then retry (extensions load async)
+        if (!checkNip07()) {
+          setTimeout(checkNip07, 500);
+          setTimeout(checkNip07, 1500);
+          setTimeout(checkNip07, 3000);
+        }
+      })();
+    </script>
+
+    <script type="module">
+      // Grid/List view toggle + file explorer list mode
+      (function() {
+        const KEY = "ia-view-mode";
+        const SORT_KEY = "ia-list-sort";
+        function getMode() { return localStorage.getItem(KEY) || "grid"; }
+        function getSort() { return localStorage.getItem(SORT_KEY) || "date-desc"; }
+        function setMode(mode) {
+          localStorage.setItem(KEY, mode);
+          document.documentElement.setAttribute("data-view", mode);
+          document.querySelectorAll(".ia-view-toggle button").forEach(b => {
+            b.classList.toggle("active", b.dataset.mode === mode);
+          });
+          if (mode === "list") { injectHeaders(); sortItems(); }
+          else { removeHeaders(); document.querySelectorAll(".ia-items-grid a").forEach(a => a.style.order = ""); }
+        }
+        function createToggle() {
+          const wrap = document.createElement("span");
+          wrap.className = "ia-view-toggle";
+          const mode = getMode();
+          wrap.innerHTML = `<button data-mode="grid" class="${mode === "grid" ? "active" : ""}" title="Grid view">&#9638;</button><button data-mode="list" class="${mode === "list" ? "active" : ""}" title="List view">&#9776;</button>`;
+          wrap.querySelectorAll("button").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+          return wrap;
+        }
+        function injectHeaders() {
+          // Clean up orphaned headers (parent replaced by React, old header left behind)
+          document.querySelectorAll(".ia-list-header").forEach(h => {
+            const next = h.nextElementSibling;
+            if (!next || !next.classList.contains("ia-items-grid")) h.remove();
+          });
+          document.querySelectorAll(".ia-items-grid").forEach(grid => {
+            if (grid.previousElementSibling?.classList.contains("ia-list-header")) return;
+            const sort = getSort();
+            const hdr = document.createElement("div");
+            hdr.className = "ia-list-header";
+            hdr.innerHTML = [
+              {col:"name", label:"Name"},
+              {col:"size", label:"Size"},
+              {col:"type", label:"Type"},
+              {col:"date", label:"Date"},
+            ].map(c => {
+              const cls = sort.startsWith(c.col) ? (sort.endsWith("asc") ? "sort-asc" : "sort-desc") : "";
+              return `<span data-col="${c.col}" class="${cls}">${c.label}</span>`;
+            }).join("");
+            hdr.querySelectorAll("span").forEach(s => s.addEventListener("click", () => {
+              const col = s.dataset.col;
+              const cur = getSort();
+              const next = cur === col + "-asc" ? col + "-desc" : col + "-asc";
+              localStorage.setItem(SORT_KEY, next);
+              injectHeaders();
+              sortItems();
+            }));
+            grid.parentElement.insertBefore(hdr, grid);
+          });
+        }
+        function removeHeaders() {
+          document.querySelectorAll(".ia-list-header").forEach(h => h.remove());
+        }
+        function sortItems() {
+          const sort = getSort();
+          const [col, dir] = sort.split("-");
+          document.querySelectorAll(".ia-items-grid").forEach(grid => {
+            const items = Array.from(grid.children);
+            // Build sort data
+            const pairs = items.map(el => {
+              let v;
+              if (col === "name") { v = el.querySelector("h3")?.textContent?.toLowerCase() || ""; }
+              else if (col === "size") { v = parseSize(el); }
+              else if (col === "type") { v = parseType(el); }
+              else { v = parseDate(el); }
+              return { el, v };
+            });
+            pairs.sort((a, b) => {
+              return dir === "asc" ? (a.v > b.v ? 1 : -1) : (a.v < b.v ? 1 : -1);
+            });
+            // Use CSS order instead of DOM re-ordering (avoids React reconciliation conflicts)
+            pairs.forEach((p, i) => p.el.style.order = i);
+          });
+        }
+        function parseSize(el) {
+          const t = el.textContent;
+          const m = t.match(/([\d.]+)\s*(B|KB|MB|GB)/i);
+          if (!m) return 0;
+          const n = parseFloat(m[1]);
+          const u = m[2].toUpperCase();
+          return n * (u === "GB" ? 1e9 : u === "MB" ? 1e6 : u === "KB" ? 1e3 : 1);
+        }
+        function parseType(el) { return el.querySelector("[class*='font-mono']")?.textContent?.toLowerCase() || ""; }
+        function parseDate(el) {
+          const t = el.textContent;
+          // Try full datetime with AM/PM first
+          const full = t.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+,?\s+\d+,?\s+\d+:\d+\s*(AM|PM)/i);
+          if (full) { const d = new Date(full[0]); if (!isNaN(d)) return d.getTime(); }
+          // Fallback: date only
+          const m = t.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+,?\s+\d+/i);
+          return m ? new Date(m[0]).getTime() : 0;
+        }
+        function injectToggles() {
+          document.querySelectorAll("h2").forEach(h2 => {
+            if (h2.querySelector(".ia-view-toggle")) return;
+            const section = h2.closest("section") || h2.closest("div");
+            const gridInScope = section && section.querySelector(".ia-items-grid");
+            if (gridInScope) h2.appendChild(createToggle());
+          });
+        }
+        // Init
+        setMode(getMode());
+        // MutationObserver watches for React re-renders that replace grid DOM
+        function runOnce() {
+          injectToggles();
+          if (getMode() === "list") { injectHeaders(); sortItems(); }
+        }
+        // Initial runs to catch early mount
+        setTimeout(runOnce, 1500);
+        setTimeout(runOnce, 4000);
+        // Periodic re-apply to catch late data loads (fallback, relay responses)
+        setInterval(runOnce, 5000);
+        // Re-run on route navigation
+        window.addEventListener("hashchange", () => setTimeout(runOnce, 300));
+      })();
+    </script>
+
+    <script type="module">
+      // Kebab menu for item cards — copy event ID, raw JSON, view raw, edit, delete
+      (function() {
+        const RELAYS = ["wss://nos.lol", "wss://relay.damus.io"];
+        let openDropdown = null;
+
+        // Cache fetched events by id
+        const eventCache = new Map();
+
+        async function fetchEvent(id) {
+          if (eventCache.has(id)) return eventCache.get(id);
+          for (const url of RELAYS) {
+            try {
+              const ws = new WebSocket(url);
+              const ev = await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => { ws.close(); reject("timeout"); }, 5000);
+                ws.onopen = () => ws.send(JSON.stringify(["REQ", "kebab", { ids: [id], limit: 1 }]));
+                ws.onmessage = (msg) => {
+                  const data = JSON.parse(msg.data);
+                  if (data[0] === "EVENT" && data[2]) {
+                    clearTimeout(timeout);
+                    ws.close();
+                    resolve(data[2]);
+                  }
+                };
+                ws.onerror = () => { clearTimeout(timeout); reject("ws error"); };
+              });
+              eventCache.set(id, ev);
+              return ev;
+            } catch { continue; }
+          }
+          return null;
+        }
+
+        function toast(msg) {
+          const el = document.createElement("div");
+          el.className = "ia-toast";
+          el.textContent = msg;
+          document.body.appendChild(el);
+          setTimeout(() => el.remove(), 1500);
+        }
+
+        function showRaw(event) {
+          const modal = document.getElementById("ia-raw-modal");
+          document.getElementById("ia-raw-json").textContent = JSON.stringify(event, null, 2);
+          modal.classList.remove("hidden");
+        }
+
+        // Close raw modal
+        document.getElementById("ia-raw-close").addEventListener("click", () => {
+          document.getElementById("ia-raw-modal").classList.add("hidden");
+        });
+        document.getElementById("ia-raw-modal").addEventListener("click", (e) => {
+          if (e.target.id === "ia-raw-modal") e.target.classList.add("hidden");
+        });
+
+        function closeDropdown() {
+          if (openDropdown) {
+            openDropdown.btn.classList.remove("ia-kebab-open");
+            openDropdown.menu.remove();
+            openDropdown = null;
+          }
+        }
+
+        async function openMenu(btn, eventId) {
+          closeDropdown();
+          const menu = document.createElement("div");
+          menu.className = "ia-dropdown";
+          const items = [
+            { label: "Copy Event ID", action: async (ev) => {
+              await navigator.clipboard.writeText(eventId);
+              toast("Event ID copied");
+            }},
+            { label: "Copy Raw JSON", action: async (ev) => {
+              const event = ev || await fetchEvent(eventId);
+              if (event) {
+                await navigator.clipboard.writeText(JSON.stringify(event, null, 2));
+                toast("JSON copied");
+              } else { toast("Failed to fetch event"); }
+            }},
+            { label: "View Raw Data", action: async (ev) => {
+              const event = ev || await fetchEvent(eventId);
+              if (event) showRaw(event);
+              else toast("Failed to fetch event");
+            }},
+            { label: "Edit", action: async (ev) => {
+              // Navigate to details page — future: inline edit
+              window.location.hash = `/details/${eventId}`;
+            }},
+            { label: "Delete", danger: true, action: async (ev) => {
+              if (!confirm("Delete this item? This removes it from your archive manifest.")) return;
+              if (!window.nostr) { toast("NIP-07 signer required"); return; }
+              try {
+                const pubkey = await window.nostr.getPublicKey();
+                const settings = getSettings();
+                const relays = settings.relays.split(",").map(r => r.trim()).filter(Boolean);
+                // Fetch current manifest
+                const manifest = await fetchManifest(pubkey, settings.manifestDtag || "archive", relays);
+                if (!manifest) { toast("No manifest found"); return; }
+                const entries = parseManifestContent(manifest.content);
+                // Find and remove entry with matching bridge or index event ID
+                let removed = false;
+                for (const [path, meta] of Object.entries(entries)) {
+                  if (meta.index_event_id === eventId || meta.bridge_event_id === eventId) {
+                    delete entries[path];
+                    removed = true;
+                    break;
+                  }
+                }
+                if (!removed) { toast("Item not found in manifest"); return; }
+                // Rebuild and publish updated manifest
+                const pathTags = buildPathTags(entries);
+                const aggHash = await computeAggregateHash(pathTags);
+                const manifestTags = [
+                  ...pathTags,
+                  ["d", settings.manifestDtag || "archive"],
+                  ["x", aggHash, "aggregate"],
+                  ["title", "Personal Archive"],
+                  ["server", settings.blossomUrl],
+                ];
+                const template = {
+                  kind: 35128,
+                  content: buildManifestContent(entries),
+                  created_at: Math.floor(Date.now() / 1000),
+                  tags: manifestTags,
+                };
+                const signed = await window.nostr.signEvent(template);
+                await publishEvent(signed, relays);
+                toast("Deleted from manifest");
+                setTimeout(() => location.reload(), 1000);
+              } catch (e) { toast("Delete failed: " + e.message); }
+            }},
+          ];
+
+          for (const item of items) {
+            const btn = document.createElement("button");
+            btn.className = "ia-dropdown-item" + (item.danger ? " ia-danger" : "");
+            btn.textContent = item.label;
+            btn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              closeDropdown();
+              await item.action();
+            });
+            menu.appendChild(btn);
+          }
+
+          btn.classList.add("ia-kebab-open");
+          btn.parentElement.style.position = "relative";
+          btn.parentElement.appendChild(menu);
+          openDropdown = { btn, menu };
+
+          // Fetch event in background for instant copy/view
+          fetchEvent(eventId);
+        }
+
+        function injectKebabs() {
+          const cards = document.querySelectorAll("a[href*=\"/details/\"]");
+          cards.forEach(card => {
+            if (card.querySelector(".ia-kebab")) return;
+            const href = card.getAttribute("href");
+            const eventId = href.split("/details/")[1];
+            const btn = document.createElement("button");
+            btn.className = "ia-kebab";
+            btn.textContent = "\u22EE"; // ⋮
+            btn.title = "Actions";
+            btn.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (openDropdown && openDropdown.btn === btn) {
+                closeDropdown();
+              } else {
+                openMenu(btn, eventId);
+              }
+            });
+            // Attach kebab to card itself so it works in both grid and list mode
+            // (in list mode, the thumbnail div is hidden)
+            card.style.position = "relative";
+            card.appendChild(btn);
+          });
+        }
+
+        // Close dropdown on outside click
+        document.addEventListener("click", (e) => {
+          if (openDropdown && !openDropdown.menu.contains(e.target) && e.target !== openDropdown.btn) {
+            closeDropdown();
+          }
+        });
+
+        function runOnce() { injectKebabs(); }
+        setTimeout(runOnce, 2000);
+        setTimeout(runOnce, 5000);
+        setTimeout(runOnce, 10000);
+        // Periodic check every 8s to catch slow loads
+        setInterval(runOnce, 8000);
+        window.addEventListener("hashchange", () => setTimeout(runOnce, 500));
+      })();
+    </script>
+
+    <script type="module">
+      // Archive browser — reads kind:35128 manifest, renders folder tree
+      (function() {
+        const SETTINGS_KEY = "ia-settings";
+        const archiveFab = document.getElementById("ia-archive-fab");
+        const archiveOverlay = document.getElementById("ia-archive-overlay");
+        const archiveClose = document.getElementById("ia-archive-close");
+        const archiveStatus = document.getElementById("ia-archive-status");
+        const archiveTree = document.getElementById("ia-archive-tree");
+
+        // Reuse helpers from settings script — they'll be in scope via the module
+        // We re-declare minimal versions here since this is a separate IIFE module
+        const DEFAULTS = {
+          blossomUrl: "https://blossom.primal.net",
+          blossomMirror: "https://nostr.download",
+          relays: "wss://nos.lol, wss://relay.damus.io, wss://relay.ngit.dev",
+          manifestDtag: "archive",
+        };
+        function getSettings() {
+          return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+        }
+
+        // --- Fetch manifest from relay ---
+        async function fetchManifestFromRelay(pubkeyHex, dTag, relayUrls) {
+          const filter = { kinds: [35128], authors: [pubkeyHex], "#d": [dTag], limit: 1 };
+          for (const url of relayUrls) {
+            try {
+              const ws = new WebSocket(url);
+              const ev = await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => { ws.close(); reject("timeout"); }, 8000);
+                ws.onopen = () => ws.send(JSON.stringify(["REQ", "arch-tree", filter]));
+                ws.onmessage = (msg) => {
+                  const data = JSON.parse(msg.data);
+                  if (data[0] === "EVENT" && data[2]) {
+                    clearTimeout(timeout);
+                    ws.send(JSON.stringify(["CLOSE", "arch-tree"]));
+                    ws.close();
+                    resolve(data[2]);
+                  }
+                };
+                ws.onerror = () => { clearTimeout(timeout); reject("ws error"); };
+              });
+              return ev;
+            } catch { continue; }
+          }
+          return null;
+        }
+
+        // --- Build folder tree from manifest entries ---
+        function buildTree(entries) {
+          // entries = { "/folder/file.pdf": { title, sha256, mime, size, added, ... }, ... }
+          const root = { name: "/", children: {}, items: [] };
+          for (const [path, meta] of Object.entries(entries)) {
+            const parts = path.split("/").filter(Boolean);
+            if (parts.length <= 1) {
+              // Root-level file
+              root.items.push({ path, name: parts[0] || path, ...meta });
+            } else {
+              // Traverse/create folder nodes
+              let node = root;
+              for (let i = 0; i < parts.length - 1; i++) {
+                if (!node.children[parts[i]]) {
+                  node.children[parts[i]] = { name: parts[i], children: {}, items: [] };
+                }
+                node = node.children[parts[i]];
+              }
+              node.items.push({ path, name: parts[parts.length - 1], ...meta });
+            }
+          }
+          return root;
+        }
+
+        // --- Render tree as HTML ---
+        function renderTree(node, depth) {
+          let html = "";
+          // Render subfolders
+          for (const [name, child] of Object.entries(node.children).sort()) {
+            const itemCount = countItems(child);
+            html += `<div class="ia-tree-folder">
+              <div class="ia-tree-folder-header" onclick="this.parentElement.classList.toggle('open')">${name} <span style="color:#555;font-weight:400;font-size:0.75rem">(${itemCount})</span></div>
+              <div class="ia-tree-folder-children">${renderTree(child, depth + 1)}</div>
+            </div>`;
+          }
+          // Render items in this folder
+          for (const item of node.items) {
+            const sizeStr = formatSize(item.size);
+            const dateStr = item.added ? new Date(item.added * 1000).toLocaleDateString() : "";
+            html += `<div class="ia-tree-item" data-path="${item.path}" data-sha256="${item.sha256}" title="${item.path}">
+              <span class="ia-tree-item-title">${item.title || item.name}</span>
+              <span class="ia-tree-item-meta">${sizeStr}${dateStr ? " &middot; " + dateStr : ""}</span>
+            </div>`;
+          }
+          return html;
+        }
+
+        function countItems(node) {
+          let count = node.items.length;
+          for (const child of Object.values(node.children)) {
+            count += countItems(child);
+          }
+          return count;
+        }
+
+        function formatSize(bytes) {
+          if (!bytes) return "";
+          if (bytes < 1024) return bytes + " B";
+          if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+          return (bytes / 1048576).toFixed(1) + " MB";
+        }
+
+        // --- Load and display archive ---
+        async function loadArchive() {
+          archiveStatus.textContent = "Loading...";
+          archiveTree.innerHTML = "";
+
+          if (!window.nostr || !window.nostr.getPublicKey) {
+            archiveStatus.textContent = "Login with NIP-07 extension to view your archive";
+            return;
+          }
+
+          try {
+            const pubkey = await window.nostr.getPublicKey();
+            const settings = getSettings();
+            const relays = settings.relays.split(",").map(r => r.trim()).filter(Boolean);
+
+            archiveStatus.textContent = `Fetching manifest for ${pubkey.slice(0, 8)}...`;
+
+            const manifest = await fetchManifestFromRelay(
+              pubkey, settings.manifestDtag || "archive", relays
+            );
+
+            console.log("[archive] pubkey:", pubkey, "dtag:", settings.manifestDtag, "relays:", relays);
+            console.log("[archive] manifest found:", manifest ? manifest.id : "null");
+            if (manifest) console.log("[archive] manifest content:", manifest.content);
+
+            if (!manifest) {
+              archiveStatus.textContent = "No archive found. Upload files to create your personal archive.";
+              archiveTree.innerHTML = '<div class="ia-tree-empty">Your archive is empty</div>';
+              return;
+            }
+
+            // Parse manifest content
+            let entries = {};
+            try {
+              const data = JSON.parse(manifest.content || "{}");
+              entries = data.entries || {};
+            } catch {
+              // Fallback: build entries from path tags
+              for (const tag of manifest.tags) {
+                if (tag[0] === "path" && tag[1] && tag[2]) {
+                  entries[tag[1]] = { sha256: tag[2], title: tag[1].split("/").pop() };
+                }
+              }
+            }
+
+            const entryCount = Object.keys(entries).length;
+            const pathTagCount = manifest.tags.filter(t => t[0] === "path").length;
+            const created = new Date(manifest.created_at * 1000).toLocaleString();
+
+            archiveStatus.textContent = `${entryCount} items, updated ${created}`;
+
+            if (entryCount === 0) {
+              archiveTree.innerHTML = '<div class="ia-tree-empty">Archive is empty</div>';
+              return;
+            }
+
+            const tree = buildTree(entries);
+            archiveTree.innerHTML = renderTree(tree, 0);
+
+            // Auto-open first folder
+            const firstFolder = archiveTree.querySelector(".ia-tree-folder");
+            if (firstFolder) firstFolder.classList.add("open");
+
+            // Click on item → download from Blossom
+            archiveTree.querySelectorAll(".ia-tree-item").forEach(item => {
+              item.addEventListener("click", () => {
+                const sha = item.dataset.sha256;
+                const settings = getSettings();
+                const blossomBase = settings.blossomUrl || "https://blossom.primal.net";
+                const url = `${blossomBase}/${sha}`;
+                window.open(url, "_blank");
+              });
+            });
+
+          } catch (e) {
+            archiveStatus.textContent = `Error: ${e.message}`;
+          }
+        }
+
+        // Archive FAB visibility handled by login widget
+        // (shown after NIP-07 login succeeds)
+
+        // --- Event listeners ---
+        archiveFab.addEventListener("click", () => {
+          archiveOverlay.classList.remove("hidden");
+          loadArchive();
+        });
+        archiveClose.addEventListener("click", () => archiveOverlay.classList.add("hidden"));
+        archiveOverlay.addEventListener("click", (e) => {
+          if (e.target === archiveOverlay) archiveOverlay.classList.add("hidden");
+        });
+
+        // Sync button in archive browser → opens ingest overlay on sync tab
+        document.getElementById("ia-archive-sync-btn").addEventListener("click", () => {
+          archiveOverlay.classList.add("hidden");
+          document.getElementById("ingest-overlay").classList.remove("hidden");
+          // Dispatch event for the ingestion script to switch to sync tab
+          document.dispatchEvent(new CustomEvent("ia-switch-tab", { detail: { tab: "sync" } }));
+        });
+      })();
+    </script>
+
+    <script type="module">
+      // Settings + Ingestion (browser-side upload + NIP-5A manifest)
+      //
+      // Upload flow:
+      //   1. User selects file → upload to Blossom
+      //   2. Publish kind:1115 bridge + kind:1116 index events
+      //   3. Update kind:35128 nsite manifest (personal archive)
+      //
+      // URL flag flow:
+      //   1. User enters URL → publish kind:1621 issue event
+      //   2. Signals intent to archive (future: auto-download via daemon)
+      // ---------------------------------------------------------------------------
+
+      const SETTINGS_KEY = "ia-settings";
+      const DEFAULTS = {
+        archiverNpub: "npub172jyyndrmwfqlznhqhte5elmz2knms3pazxsug6dv43ap4hex3vqzg57zw",
+        blossomUrl: "https://blossom.primal.net",
+        blossomMirror: "https://nostr.download",
+        relays: "wss://nos.lol, wss://relay.damus.io, wss://relay.ngit.dev",
+        manifestDtag: "archive",
+      };
+      //
+
+      function getSettings() {
+        return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+      }
+      function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+      // --- Settings UI ---
+      const settingsFab = document.getElementById("ia-settings-fab");
+      const settingsOverlay = document.getElementById("ia-settings-overlay");
+      const settingsClose = document.getElementById("ia-settings-close");
+      const settingsForm = document.getElementById("ia-settings-form");
+
+      settingsFab.addEventListener("click", () => {
+        const s = getSettings();
+        document.getElementById("set-archiver-npub").value = s.archiverNpub || "";
+        document.getElementById("set-blossom-url").value = s.blossomUrl || "";
+        document.getElementById("set-blossom-mirror").value = s.blossomMirror || "";
+        document.getElementById("set-relays").value = s.relays || "";
+        document.getElementById("set-manifest-dtag").value = s.manifestDtag || "archive";
+        settingsOverlay.classList.remove("hidden");
+      });
+      settingsClose.addEventListener("click", () => settingsOverlay.classList.add("hidden"));
+      settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) settingsOverlay.classList.add("hidden"); });
+      settingsForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveSettings({
+          archiverNpub: document.getElementById("set-archiver-npub").value.trim(),
+          blossomUrl: document.getElementById("set-blossom-url").value.trim(),
+          blossomMirror: document.getElementById("set-blossom-mirror").value.trim(),
+          relays: document.getElementById("set-relays").value.trim(),
+          manifestDtag: document.getElementById("set-manifest-dtag").value.trim() || "archive",
+        });
+        settingsOverlay.classList.add("hidden");
+        toast("Settings saved");
+      });
+
+      function toast(msg) {
+        const el = document.createElement("div");
+        el.className = "ia-toast";
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1500);
+      }
+
+      // --- Tab switching ---
+      let activeTab = "url";
+      document.querySelectorAll(".ingest-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+          activeTab = tab.dataset.tab;
+          document.querySelectorAll(".ingest-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === activeTab));
+          document.querySelectorAll(".ingest-panel").forEach(p => p.classList.toggle("active", p.id === `ingest-panel-${activeTab}`));
+          // Hide common fields + submit button when sync tab is active
+          const isSync = activeTab === "sync";
+          document.querySelectorAll("#ingest-form > .ingest-row").forEach(r => r.style.display = isSync ? "none" : "");
+          document.querySelectorAll("#ingest-form > .checkbox-label").forEach(r => r.style.display = isSync ? "none" : "");
+          document.getElementById("ingest-btn").style.display = isSync ? "none" : "";
+        });
+      });
+
+      // --- File drop zone ---
+      let selectedFile = null;
+      const dropZone = document.getElementById("ingest-file-drop");
+      const fileInput = document.getElementById("ingest-file-input");
+      const fileNameEl = document.getElementById("ingest-file-name");
+
+      dropZone.addEventListener("click", () => fileInput.click());
+      dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        if (e.dataTransfer.files.length) selectFile(e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener("change", () => { if (fileInput.files.length) selectFile(fileInput.files[0]); });
+
+      function selectFile(f) {
+        selectedFile = f;
+        fileNameEl.textContent = `${f.name} (${(f.size / 1048576).toFixed(1)} MB)`;
+      }
+
+      // --- Folder sync ---
+      // Uses showDirectoryPicker (Chromium) with IndexedDB handle persistence.
+      // Falls back to <input webkitdirectory> for other browsers.
+      let syncDiff = null; // { toUpload: [...], unchanged: [...] }
+      let dirHandle = null; // persisted FileSystemDirectoryHandle
+      let lastReadFiles = null; // cached File[] to re-diff when force toggle changes
+
+      const syncDrop = document.getElementById("ingest-sync-drop");
+      const folderInput = document.getElementById("ingest-folder-input");
+      const syncInfo = document.getElementById("ingest-sync-info");
+      const syncStored = document.getElementById("ingest-sync-stored");
+      const syncDiffEl = document.getElementById("ingest-sync-diff");
+      const syncBtn = document.getElementById("ingest-sync-btn");
+      const syncForceCheckbox = document.getElementById("ingest-sync-force");
+      const syncForceLabel = document.getElementById("ingest-sync-force-label");
+
+      // --- IndexedDB for persisting directory handles ---
+      const IDB_NAME = "ia-sync-handles";
+      const IDB_STORE = "handles";
+      function idbOpen() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(IDB_NAME, 1);
+          req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+      async function idbGet(key) {
+        const db = await idbOpen();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readonly");
+          const req = tx.objectStore(IDB_STORE).get(key);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+      async function idbPut(key, value) {
+        const db = await idbOpen();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readwrite");
+          tx.objectStore(IDB_STORE).put(value, key);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+
+      // Check if showDirectoryPicker is available
+      const hasDirectoryPicker = typeof window.showDirectoryPicker === "function";
+
+      // Restore saved folder handle on load
+      (async () => {
+        if (!hasDirectoryPicker) return;
+        try {
+          const saved = await idbGet("sync-dir-handle");
+          if (saved) {
+            // Check if permission is still granted
+            const perm = await saved.queryPermission({ mode: "read" });
+            if (perm === "granted") {
+              dirHandle = saved;
+              syncStored.style.display = "block";
+              syncStored.textContent = `Remembered folder: ${saved.name} (click to re-sync)`;
+              syncDrop.querySelector("div:last-child").textContent = saved.name;
+            }
+          }
+        } catch {}
+      })();
+
+      // Click on drop zone → use saved handle or pick folder
+      syncDrop.addEventListener("click", async () => {
+        if (hasDirectoryPicker) {
+          // If we have a saved handle, try to use it first
+          if (dirHandle) {
+            try {
+              const perm = await dirHandle.requestPermission({ mode: "read" });
+              if (perm === "granted") {
+                syncDiffEl.textContent = "Reading folder...";
+                const files = await readHandleFiles(dirHandle);
+                await processFolderFiles(files);
+                return;
+              }
+            } catch {}
+          }
+          // No saved handle or permission denied → open picker
+          try {
+            const handle = await window.showDirectoryPicker({ mode: "read" });
+            dirHandle = handle;
+            await idbPut("sync-dir-handle", handle);
+            syncStored.style.display = "block";
+            syncStored.textContent = `Folder saved: ${handle.name} (remembered for next visit)`;
+            syncDrop.querySelector("div:last-child").textContent = handle.name;
+            const files = await readHandleFiles(handle);
+            await processFolderFiles(files);
+          } catch (e) {
+            if (e.name !== "AbortError") console.warn("Directory picker error:", e);
+          }
+        } else {
+          // Fallback for non-Chromium browsers
+          folderInput.click();
+        }
+      });
+
+      // Also allow re-clicking the stored hint to re-sync saved folder
+      syncStored.addEventListener("click", async () => {
+        if (!dirHandle) return;
+        try {
+          // Request permission explicitly (needed if page was refreshed)
+          const perm = await dirHandle.requestPermission({ mode: "read" });
+          if (perm !== "granted") { toast("Permission denied for folder access"); return; }
+          syncDiffEl.textContent = "Reading folder...";
+          const files = await readHandleFiles(dirHandle);
+          await processFolderFiles(files);
+        } catch (e) {
+          syncDiffEl.innerHTML = `<div style="color:#f87171">Error: ${e.message}</div>`;
+        }
+      });
+      syncStored.style.cursor = "pointer";
+
+      // Fallback: <input webkitdirectory>
+      folderInput.addEventListener("change", () => {
+        if (folderInput.files.length > 0) processFolderFiles(Array.from(folderInput.files));
+      });
+
+      // Read all files from a FileSystemDirectoryHandle recursively
+      async function readHandleFiles(handle) {
+        const files = [];
+        async function walk(h, path) {
+          for await (const entry of h.values()) {
+            if (entry.kind === "file") {
+              const file = await entry.getFile();
+              // Create a wrapper that includes webkitRelativePath
+              const wrapped = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
+              Object.defineProperty(wrapped, "webkitRelativePath", { value: path + file.name, writable: false });
+              Object.defineProperty(wrapped, "size", { value: file.size });
+              files.push(wrapped);
+            } else if (entry.kind === "directory") {
+              await walk(entry, path + entry.name + "/");
+            }
+          }
+        }
+        await walk(handle, handle.name + "/");
+        return files;
+      }
+
+      function escHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+      function fmtSize(bytes) { if (bytes < 1024) return bytes + " B"; if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB"; return (bytes / 1048576).toFixed(1) + " MB"; }
+
+      // Re-diff when force checkbox toggles (uses cached files)
+      syncForceCheckbox.addEventListener("change", () => {
+        if (lastReadFiles) processFolderFiles(lastReadFiles);
+      });
+
+      // Process selected folder: hash files, diff against manifest, show results
+      async function processFolderFiles(files) {
+        if (!files.length) return;
+        if (!window.nostr) { toast("NIP-07 extension required"); return; }
+        lastReadFiles = files; // cache for force toggle re-diff
+
+        const rootFolder = files[0].webkitRelativePath?.split("/")[0] || "folder";
+        const totalSize = files.reduce((s, f) => s + f.size, 0);
+        syncInfo.textContent = `${rootFolder} — ${files.length} files — ${fmtSize(totalSize)}`;
+        syncDiffEl.textContent = "Computing diff...";
+        syncBtn.style.display = "none";
+        syncForceLabel.style.display = "inline-flex";
+
+        try {
+          // Hash all files
+          const fileData = [];
+          for (const file of files) {
+            const buffer = await file.arrayBuffer();
+            const hash = await sha256(buffer);
+            const parts = file.webkitRelativePath.split("/");
+            const relativePath = "/" + parts.slice(1).join("/"); // remove root folder name
+            fileData.push({ file, sha256: hash, relativePath, mime: file.type || "application/octet-stream", size: file.size });
+          }
+
+          // Fetch existing manifest
+          const pubkey = await window.nostr.getPublicKey();
+          const settings = getSettings();
+          const relays = settings.relays.split(",").map(r => r.trim()).filter(Boolean);
+          const existing = await fetchManifest(pubkey, getManifestDtag(), relays);
+          const existingEntries = existing ? parseManifestContent(existing.content) : {};
+
+          const forceReSync = syncForceCheckbox && syncForceCheckbox.checked;
+
+          // Diff: new files, changed files, unchanged
+          const newFiles = [], changedFiles = [], unchangedFiles = [];
+          for (const fd of fileData) {
+            if (forceReSync) {
+              // Force mode: upload everything
+              const ex = existingEntries[fd.relativePath];
+              if (!ex) newFiles.push(fd);
+              else changedFiles.push(fd);
+            } else {
+              const ex = existingEntries[fd.relativePath];
+              if (!ex) newFiles.push(fd);
+              else if (ex.sha256 !== fd.sha256) changedFiles.push(fd);
+              else unchangedFiles.push(fd);
+            }
+          }
+
+          syncDiff = { toUpload: [...newFiles, ...changedFiles], unchanged: unchangedFiles };
+
+          // Render diff
+          let html = "";
+          if (forceReSync && changedFiles.length > 0) {
+            html += `<div style="color:#fbbf24;margin-bottom:0.3em">Force re-sync: ${changedFiles.length} files will be re-uploaded</div>`;
+          }
+          if (newFiles.length > 0) {
+            html += `<div style="color:#6ee7b7;margin-bottom:0.3em">+ ${newFiles.length} new</div>`;
+            for (const f of newFiles.slice(0, 8)) html += `<div style="color:#6ee7b7;padding-left:1em">${escHtml(f.relativePath)} <span style="color:#555">${fmtSize(f.size)}</span></div>`;
+            if (newFiles.length > 8) html += `<div style="color:#555;padding-left:1em">+${newFiles.length - 8} more</div>`;
+          }
+          if (changedFiles.length > 0 && !forceReSync) {
+            html += `<div style="color:#fbbf24;margin:0.5em 0 0.3em">~ ${changedFiles.length} changed</div>`;
+            for (const f of changedFiles.slice(0, 5)) html += `<div style="color:#fbbf24;padding-left:1em">${escHtml(f.relativePath)}</div>`;
+          }
+          if (unchangedFiles.length > 0) html += `<div style="color:#555;margin-top:0.5em">= ${unchangedFiles.length} unchanged (skipped)</div>`;
+
+          if (syncDiff.toUpload.length === 0) {
+            html = '<div style="color:#6ee7b7">All files up to date. Nothing to sync.</div>';
+            syncDiffEl.innerHTML = html;
+            // Show force checkbox even when up to date so user can force re-sync
+            syncForceLabel.style.display = "inline-flex";
+          } else {
+            syncDiffEl.innerHTML = html;
+            syncBtn.style.display = "inline-block";
+            syncForceLabel.style.display = "inline-flex";
+            syncBtn.textContent = `Sync ${syncDiff.toUpload.length} files`;
+          }
+
+          // Save folder reference
+          localStorage.setItem("ia-sync-folder", rootFolder);
+        } catch (e) {
+          syncDiffEl.innerHTML = `<div style="color:#f87171">Error: ${e.message}</div>`;
+        }
+      }
+
+      // Sync button: upload new/changed files, update manifest
+      syncBtn.addEventListener("click", async () => {
+        if (!syncDiff || !window.nostr) return;
+        syncBtn.disabled = true;
+        syncBtn.textContent = "Syncing...";
+
+        try {
+          const settings = getSettings();
+          const relays = settings.relays.split(",").map(r => r.trim()).filter(Boolean);
+          const pubkey = await window.nostr.getPublicKey();
+
+          // Fetch latest manifest
+          const existing = await fetchManifest(pubkey, getManifestDtag(), relays);
+          const manifestEntries = existing ? parseManifestContent(existing.content) : {};
+
+          // Upload each file to Blossom
+          for (let i = 0; i < syncDiff.toUpload.length; i++) {
+            const fd = syncDiff.toUpload[i];
+            const fname = fd.relativePath.split("/").pop();
+            syncDiffEl.innerHTML += `<div style="color:#fbbf24">${i + 1}/${syncDiff.toUpload.length} ${escHtml(fname)}...</div>`;
+            syncDiffEl.scrollTop = syncDiffEl.scrollHeight;
+
+            const buffer = await fd.file.arrayBuffer();
+            await blossomUpload(settings.blossomUrl, new Uint8Array(buffer), fname, fd.mime);
+            // Mirror upload (non-fatal)
+            if (settings.blossomMirror) {
+              try { await blossomUpload(settings.blossomMirror, new Uint8Array(buffer), fname, fd.mime); }
+              catch {}
+            }
+
+            console.log(`[sync] uploaded ${i+1}/${syncDiff.toUpload.length}: ${fd.relativePath} sha=${fd.sha256.slice(0,12)}`);
+
+            // Update entry in manifest
+            manifestEntries[fd.relativePath] = {
+              title: fname,
+              sha256: fd.sha256,
+              mime: fd.mime,
+              size: fd.size,
+              added: Math.floor(Date.now() / 1000),
+            };
+          }
+
+          // Build and publish updated manifest
+          const pathTags = buildPathTags(manifestEntries);
+          const aggHash = await computeAggregateHash(pathTags);
+          const manifestTags = [
+            ...pathTags,
+            ["d", getManifestDtag()],
+            ["x", aggHash, "aggregate"],
+            ["title", "Personal Archive"],
+            ["server", settings.blossomUrl],
+          ];
+          if (settings.blossomMirror) manifestTags.push(["server", settings.blossomMirror]);
+
+          const manifestEv = await signEvent({
+            kind: 35128,
+            content: buildManifestContent(manifestEntries),
+            created_at: Math.floor(Date.now() / 1000),
+            tags: manifestTags,
+          });
+          console.log("[sync] Signed manifest event:", manifestEv.id, "entries:", Object.keys(manifestEntries).length);
+          console.log("[sync] Manifest content:", buildManifestContent(manifestEntries));
+          console.log("[sync] Publishing to relays:", relays);
+          const mResults = await publishEvent(manifestEv, relays);
+          const mOk = mResults.filter(r => r.ok).length;
+          console.log("[sync] Publish results:", mResults);
+
+          syncDiffEl.innerHTML += `<div style="color:#6ee7b7;margin-top:0.5em">Done! ${syncDiff.toUpload.length} files synced. Manifest published to ${mOk}/${mResults.length} relays.</div>`;
+          syncBtn.textContent = "Synced!";
+          syncDiff = null;
+          // Reset force checkbox
+          if (syncForceCheckbox) syncForceCheckbox.checked = false;
+        } catch (e) {
+          syncDiffEl.innerHTML += `<div style="color:#f87171">Error: ${e.message}</div>`;
+          syncBtn.disabled = false;
+          syncBtn.textContent = "Retry Sync";
+        }
+      });
+
+      // FAB visibility is now handled by login widget (only shown after NIP-07 detected)
+
+      // --- Modal ---
+      const overlay = document.getElementById("ingest-overlay");
+      const closeBtn = document.getElementById("ingest-close");
+      closeBtn.addEventListener("click", () => overlay.classList.add("hidden"));
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.add("hidden"); });
+      document.getElementById("ingest-fab").addEventListener("click", () => overlay.classList.remove("hidden"));
+
+      // Listen for tab switch events from other scripts (e.g. archive browser sync button)
+      document.addEventListener("ia-switch-tab", (e) => {
+        const tab = e.detail.tab;
+        activeTab = tab;
+        document.querySelectorAll(".ingest-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+        document.querySelectorAll(".ingest-panel").forEach(p => p.classList.toggle("active", p.id === `ingest-panel-${tab}`));
+        const isSync = tab === "sync";
+        document.querySelectorAll("#ingest-form > .ingest-row").forEach(r => r.style.display = isSync ? "none" : "");
+        document.querySelectorAll("#ingest-form > .checkbox-label").forEach(r => r.style.display = isSync ? "none" : "");
+        document.getElementById("ingest-btn").style.display = isSync ? "none" : "";
+      });
+
+      // --- Restore cached folder ---
+      const cachedFolder = localStorage.getItem("ia-last-folder");
+      if (cachedFolder) document.getElementById("ingest-folder").value = cachedFolder;
+
+      // --- Helpers ---
+      async function sha256(buffer) {
+        const hash = await crypto.subtle.digest("SHA-256", buffer);
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
+      }
+
+      function getEventHash(ev) {
+        const serialized = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+        // Need to hash — but we'll use the raw serialization for schnorr signing
+        // For NIP-07, we just need to provide the template and let the extension compute id
+        return null; // NIP-07 handles this
+      }
+
+      function npubToHex(npub) {
+        // Use the SPA's bundled nip19 if available, otherwise use a simple bech32 decoder
+        try {
+          const { bech32 } = window.bech32 || (() => {
+            // Minimal bech32 decoder inline
+            const charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+            function decode(str) {
+              const d = [];
+              for (const c of str) { const x = charset.indexOf(c); if (x < 0) throw new Error("bad char"); d.push(x); }
+              return d;
+            }
+            function convertBits(data, fromBits, toBits, pad) {
+              let acc = 0, bits = 0; const ret = []; const maxv = (1 << toBits) - 1;
+              for (const v of data) { acc = (acc << fromBits) | v; bits += fromBits; while (bits >= toBits) { bits -= toBits; ret.push((acc >> bits) & maxv); } }
+              if (pad && bits > 0) ret.push((acc << (toBits - bits)) & maxv);
+              return ret;
+            }
+            return {
+              decode(str) {
+                const pos = str.lastIndexOf("1");
+                const data = decode(str.slice(pos + 1));
+                const bytes = convertBits(data, 5, 8, false);
+                return new Uint8Array(bytes);
+              }
+            };
+          })();
+          return npubBech32Decode(npub);
+        } catch { return null; }
+      }
+
+      function npubBech32Decode(npub) {
+        // Minimal bech32 decode for npub → hex string
+        const charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+        function polyMod(values) {
+          let c = 1;
+          for (const v of values) { const b = c >> 25; c = ((c & 0x1ffffff) << 5) ^ v; for (let i = 0; i < 5; i++) if ((b >> i) & 1) c ^= [0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3][i]; }
+          return c;
+        }
+        const pos = npub.lastIndexOf("1");
+        const data = [];
+        for (const c of npub.slice(pos + 1)) { const x = charset.indexOf(c); if (x >= 0) data.push(x); }
+        // 5-to-8 bit conversion
+        let acc = 0, bits = 0; const bytes = [];
+        for (const v of data.slice(0, -6)) { acc = (acc << 5) | v; bits += 5; while (bits >= 8) { bits -= 8; bytes.push((acc >> bits) & 0xff); } }
+        // Return hex string
+        return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+      }
+
+      async function signEvent(template) {
+        if (!window.nostr) throw new Error("No NIP-07 signer found. Install nos2x or Alby.");
+        return window.nostr.signEvent(template);
+      }
+
+      async function blossomUpload(url, fileBytes, filename, mimeType) {
+        const hex = await sha256(fileBytes);
+        // Build kind 24242 auth event
+        const authTemplate = {
+          kind: 24242,
+          content: "nostr-archive: upload",
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["t", "upload"],
+            ["x", hex],
+            ["expiration", String(Math.floor(Date.now() / 1000) + 600)],
+          ],
+        };
+        const signed = await signEvent(authTemplate);
+        const payload = JSON.stringify(signed);
+        const authHeader = "Nostr " + btoa(payload);
+
+        const resp = await fetch(url.replace(/\/$/, "") + "/upload", {
+          method: "PUT",
+          headers: { "Authorization": authHeader, "Content-Type": mimeType || "application/octet-stream" },
+          body: fileBytes,
+        });
+        if (!resp.ok) throw new Error(`Blossom upload failed: ${resp.status} ${await resp.text()}`);
+        const desc = await resp.json();
+        return { sha256: hex, size: fileBytes.byteLength, ...desc };
+      }
+
+      function publishToRelay(relayUrl, event) {
+        return new Promise((resolve, reject) => {
+          const ws = new WebSocket(relayUrl);
+          const timeout = setTimeout(() => { ws.close(); reject("timeout"); }, 10000);
+          ws.onopen = () => {
+            ws.send(JSON.stringify(["EVENT", event]));
+          };
+          ws.onmessage = (msg) => {
+            const data = JSON.parse(msg.data);
+            if (data[0] === "OK") {
+              clearTimeout(timeout); ws.close();
+              // OK format: ["OK", event_id, success_bool, message]
+              if (data[2] === true) resolve(true);
+              else reject(data[3] || data[2] || "rejected");
+            }
+            else if (data[0] === "NOTICE") { clearTimeout(timeout); ws.close(); reject(data[1]); }
+          };
+          ws.onerror = () => { clearTimeout(timeout); reject("ws error"); };
+        });
+      }
+
+      async function publishEvent(event, relayUrls) {
+        const results = [];
+        for (const url of relayUrls) {
+          try { await publishToRelay(url, event); results.push({ url, ok: true }); }
+          catch (e) { results.push({ url, ok: false, message: String(e) }); }
+        }
+        return results;
+      }
+
+      const MIME_FOLDER_MAP = [
+        ["application/pdf", "texts"], ["text/", "texts"], ["image/", "images"],
+        ["audio/", "audio"], ["video/", "video"],
+        ["application/zip", "software"], ["application/x-tar", "software"],
+        ["application/gzip", "software"],
+      ];
+      function defaultFolder(mime) {
+        for (const [prefix, folder] of MIME_FOLDER_MAP) { if (mime.startsWith(prefix)) return folder; }
+        return "other";
+      }
+      // --- NIP-5A (nsite) manifest helpers ---
+      // d-tag for the personal archive nsite — read from settings, fallback to "archive"
+      function getManifestDtag() { return getSettings().manifestDtag || "archive"; }
+
+      /**
+       * Fetch the latest kind:35128 manifest for a given pubkey + d-tag.
+       * Returns the parsed event, or null if not found.
+       */
+      async function fetchManifest(pubkeyHex, dTag, relayUrls) {
+        const filter = { kinds: [35128], authors: [pubkeyHex], "#d": [dTag], limit: 1 };
+        for (const url of relayUrls) {
+          try {
+            const ws = new WebSocket(url);
+            const ev = await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => { ws.close(); reject("timeout"); }, 8000);
+              ws.onopen = () => ws.send(JSON.stringify(["REQ", "manifest", filter]));
+              ws.onmessage = (msg) => {
+                const data = JSON.parse(msg.data);
+                if (data[0] === "EVENT" && data[2]) {
+                  clearTimeout(timeout);
+                  ws.send(JSON.stringify(["CLOSE", "manifest"]));
+                  ws.close();
+                  resolve(data[2]);
+                }
+              };
+              ws.onerror = () => { clearTimeout(timeout); reject("ws error"); };
+            });
+            return ev;
+          } catch { continue; }
+        }
+        return null;
+      }
+
+      /**
+       * Compute NIP-5A aggregate hash from path tags.
+       * For each path tag: "<sha256> <absolute-path>\n", sort, SHA-256.
+       */
+      async function computeAggregateHash(pathTags) {
+        const lines = pathTags
+          .map(t => `${t[2]} ${t[1]}\n`)
+          .sort();
+        const bytes = new TextEncoder().encode(lines.join(""));
+        return sha256(bytes);
+      }
+
+      /**
+       * Parse manifest content JSON. Returns entries object or empty.
+       */
+      function parseManifestContent(content) {
+        try {
+          const data = JSON.parse(content || "{}");
+          return data.entries || {};
+        } catch {
+          return {};
+        }
+      }
+
+      /**
+       * Build manifest content JSON from entries object.
+       */
+      function buildManifestContent(entries) {
+        return JSON.stringify({ schema: "nostr-archive/v1", entries }, null, 2) + "\n";
+      }
+
+      /**
+       * Build path tags array from entries object.
+       */
+      function buildPathTags(entries) {
+        return Object.entries(entries).map(([path, meta]) => ["path", path, meta.sha256]);
+      }
+
+      // --- Step indicator helper ---
+      function addStep(phase, ok, msg) {
+        const steps = document.getElementById("ingest-steps");
+        const icon = ok ? "✓" : "✗";
+        const color = ok ? "#6ee7b7" : "#f87171";
+        steps.innerHTML += `<div class="ingest-step" style="color:${color}">${icon} ${msg}</div>`;
+      }
+
+      // --- Form submission ---
+      document.getElementById("ingest-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById("ingest-btn");
+        const progress = document.getElementById("ingest-progress");
+        const steps = document.getElementById("ingest-steps");
+        const current = document.getElementById("ingest-current");
+
+        const title = document.getElementById("ingest-title").value.trim();
+        const folder = document.getElementById("ingest-folder").value.trim();
+        const topics = (document.getElementById("ingest-topics").value.trim() || "").split(",").map(t => t.trim()).filter(Boolean);
+        const sourceKind = document.getElementById("ingest-source-kind").value;
+
+        // Cache folder
+        if (folder) localStorage.setItem("ia-last-folder", folder);
+
+        if (activeTab === "url") {
+          // --- URL Flagging → kind 1621 issue event ---
+          const url = document.getElementById("ingest-url").value.trim();
+          if (!url) return;
+
+          // Need NIP-07 signer
+          if (!window.nostr || !window.nostr.signEvent) {
+            toast("Install a Nostr signer extension (nos2x, Alby, etc) to flag URLs");
+            return;
+          }
+
+          const settings = getSettings();
+
+          btn.disabled = true;
+          btn.textContent = "Flagging...";
+          current.textContent = "";
+          progress.style.display = "block";
+          steps.innerHTML = "";
+
+          try {
+            // Build kind 1621 issue event (NIP-34) — signals intent to archive
+            const issueBody = [
+              `**URL:** ${url}`,
+              title ? `**Title:** ${title}` : "",
+              folder ? `**Folder:** ${folder}` : "",
+              sourceKind ? `**Source kind:** ${sourceKind}` : "",
+              topics.length ? `**Topics:** ${topics.join(", ")}` : "",
+            ].filter(Boolean).join("\n");
+
+            const issueTitle = title || `[archive] ${url}`;
+            const now = Math.floor(Date.now() / 1000);
+
+            // Issue tags — reference archiver if configured
+            const issueTags = [
+              ["subject", issueTitle],
+              ["t", "archive"],
+              ["r", url],
+              ...topics.map(t => ["t", t]),
+              ["alt", `Archive flag: ${issueTitle}`],
+            ];
+            if (settings.archiverNpub) {
+              const archiverHex = npubBech32Decode(settings.archiverNpub);
+              if (archiverHex) issueTags.push(["p", archiverHex]);
+            }
+
+            const template = {
+              kind: 1621,
+              content: issueBody,
+              tags: issueTags,
+              created_at: now,
+            };
+
+            // Sign via NIP-07
+            const signed = await window.nostr.signEvent(template);
+
+            addStep("sign", true, `Signed issue event`);
+
+            // Publish to configured relays
+            const relays = settings.relays.split(",").map(r => r.trim()).filter(Boolean);
+            const results = await publishEvent(signed, relays);
+            const okCount = results.filter(r => r.ok).length;
+
+            if (okCount > 0) {
+              const relayList = results.filter(r => r.ok).map(r => {
+                try { return new URL(r.url).hostname; } catch { return r.url; }
+              }).join(", ");
+              addStep("publish", true, `Published to ${okCount}/${results.length} relays (${relayList})`);
+              addStep("event", true, `Event ID: ${signed.id}`);
+              current.innerHTML = `Flagged for archiving! Event ID: <code style="color:#6ee7b7">${signed.id.slice(0,12)}...</code>`;
+            } else {
+              const failList = results.map(r => {
+                try { return `${new URL(r.url).hostname}: ${r.message}`; } catch { return `${r.url}: ${r.message}`; }
+              }).join("; ");
+              addStep("publish", false, `Failed: ${failList}`);
+              addStep("event", true, `Event ID: ${signed.id}`);
+              current.textContent = `Failed to publish to any relay`;
+            }
+
+            btn.disabled = false;
+            btn.textContent = "Flag this URL";
+          } catch (err) {
+            current.textContent = `Error: ${err.message}`;
+            btn.disabled = false;
+            btn.textContent = "Flag this URL";
+          }
+
+        } else {
+          // --- File Upload → Browser-side pipeline ---
+          if (!selectedFile) { toast("Select a file first"); return; }
+
+          const settings = getSettings();
+          const relays = settings.relays.split(",").map(r => r.trim()).filter(Boolean);
+
+          btn.disabled = true;
+          btn.textContent = "Uploading...";
+          progress.style.display = "block";
+          steps.innerHTML = "";
+          current.textContent = "";
+
+          const PHASES = [
+            { key: "hash", label: "Compute hash" },
+            { key: "upload", label: "Upload to Blossom" },
+            { key: "manifest", label: "Build manifest" },
+            { key: "sign", label: "Sign events" },
+            { key: "publish", label: "Publish to relays" },
+            { key: "nsite", label: "Update archive manifest" },
+          ];
+          const stepEls = {};
+          for (const phase of PHASES) {
+            const div = document.createElement("div");
+            div.className = "ingest-step ingest-step-pending";
+            div.innerHTML = `<span class="ingest-step-icon">○</span> <span class="ingest-step-label">${phase.label}</span> <span class="ingest-step-detail"></span>`;
+            steps.appendChild(div);
+            stepEls[phase.key] = div;
+          }
+
+          function setStep(key, status, detail) {
+            const el = stepEls[key];
+            if (!el) return;
+            const icon = el.querySelector(".ingest-step-icon");
+            const det = el.querySelector(".ingest-step-detail");
+            if (status === "running") { el.className = "ingest-step ingest-step-running"; icon.textContent = "●"; }
+            else if (status === "done") { el.className = "ingest-step ingest-step-done"; icon.textContent = "✓"; }
+            else if (status === "error") { el.className = "ingest-step ingest-step-error"; icon.textContent = "✗"; }
+            if (detail) det.textContent = detail;
+            current.textContent = `${key}: ${status}`;
+          }
+
+          try {
+            // Step 1: Read + hash file
+            setStep("hash", "running");
+            const fileBuffer = await selectedFile.arrayBuffer();
+            const fileSha = await sha256(fileBuffer);
+            const mime = selectedFile.type || "application/octet-stream";
+            const fname = selectedFile.name;
+            const fileSize = selectedFile.size;
+            setStep("hash", "done", fileSha);
+
+            // Step 2: Upload to Blossom
+            setStep("upload", "running");
+            const desc = await blossomUpload(settings.blossomUrl, new Uint8Array(fileBuffer), fname, mime);
+            setStep("upload", "done", fileSize < 1024 ? `${fileSize} B` : fileSize < 1048576 ? `${(fileSize / 1024).toFixed(1)} KB` : `${(fileSize / 1048576).toFixed(1)} MB`);
+            // Mirror
+            if (settings.blossomMirror) {
+              try { await blossomUpload(settings.blossomMirror, new Uint8Array(fileBuffer), fname, mime); }
+              catch (e) { /* mirror failure is non-fatal */ }
+            }
+
+            // Step 3: Build + upload manifest
+            setStep("manifest", "running");
+            const blobEntry = { x: fileSha, role: "source", filename: fname, m: mime, size: fileSize };
+            const source = { kind: sourceKind || "webpage", url: "" };
+            const manifest = {
+              version: "1.0", type: "archive-bundle",
+              title: title || fname,
+              ...(title ? {} : {}),
+              source, blobs: [blobEntry],
+            };
+            const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest, null, 2) + "\n");
+            const manifestDesc = await blossomUpload(settings.blossomUrl, manifestBytes, "manifest.json", "application/json");
+            setStep("manifest", "done", manifestDesc.sha256);
+
+            // Step 4: Sign events
+            setStep("sign", "running");
+            // Bridge event (kind 1115)
+            const bridgeTemplate = {
+              kind: 1115,
+              content: "",
+              created_at: Math.floor(Date.now() / 1000),
+              tags: [
+                ["x", fileSha],
+                ["x", manifestDesc.sha256],
+                ["primary", manifestDesc.sha256, String(manifestDesc.size)],
+              ],
+            };
+            const bridge = await signEvent(bridgeTemplate);
+            setStep("sign", "done", `Bridge: ${bridge.id}`);
+
+            // Index event (kind 1116)
+            const indexTags = [
+              ["e", bridge.id],
+              ["title", title || fname],
+            ];
+            // Add folder as topic tag for auto-filing in the UI
+            const autoFolder = folder || defaultFolder(mime);
+            if (autoFolder) indexTags.push(["t", autoFolder]);
+            if (document.getElementById("ingest-topics").value.trim()) {
+              for (const t of topics) indexTags.push(["t", t]);
+            }
+            const indexTemplate = {
+              kind: 1116,
+              content: "",
+              created_at: Math.floor(Date.now() / 1000),
+              tags: indexTags,
+            };
+            const indexEv = await signEvent(indexTemplate);
+
+            // Step 5: Publish
+            setStep("publish", "running");
+            const bResults = await publishEvent(bridge, relays);
+            const iResults = await publishEvent(indexEv, relays);
+            const allResults = [...bResults, ...iResults];
+            const allOk = allResults.filter(r => r.ok).length;
+            const relayDetail = allResults.filter(r => r.ok).map(r => {
+              try { return new URL(r.url).hostname; } catch { return r.url; }
+            });
+            // Deduplicate hostnames
+            const uniqueHosts = [...new Set(relayDetail)];
+            setStep("publish", "done", `${allOk}/${relays.length * 2} ok (${uniqueHosts.join(", ")})`);
+            addStep("event", true, `Index: ${indexEv.id}`);
+
+            // Step 6: Update NIP-5A (nsite) manifest for personal archive
+            setStep("nsite", "running");
+            try {
+              // Get user's pubkey from NIP-07
+              const userPubkey = await window.nostr.getPublicKey();
+
+              // Fetch existing manifest if any
+              const existing = await fetchManifest(userPubkey, getManifestDtag(), relays);
+              const existingEntries = existing ? parseManifestContent(existing.content) : {};
+
+              // Build the new entry path
+              const entryPath = `/${autoFolder}/${fname}`;
+
+              // Add/update entry in manifest
+              existingEntries[entryPath] = {
+                title: title || fname,
+                added: Math.floor(Date.now() / 1000),
+                source: { kind: sourceKind || "webpage", url: "" },
+                topics: topics,
+                bridge_event_id: bridge.id,
+                index_event_id: indexEv.id,
+                sha256: fileSha,
+                mime: mime,
+                size: fileSize,
+              };
+
+              // Build path tags from all entries
+              const pathTags = buildPathTags(existingEntries);
+              const aggHash = await computeAggregateHash(pathTags);
+
+              // Build the kind:35128 manifest event
+              const manifestTags = [
+                ...pathTags,
+                ["d", getManifestDtag()],
+                ["x", aggHash, "aggregate"],
+                ["title", "Personal Archive"],
+                ["server", settings.blossomUrl],
+              ];
+              if (settings.blossomMirror) {
+                manifestTags.push(["server", settings.blossomMirror]);
+              }
+
+              const manifestTemplate = {
+                kind: 35128,
+                content: buildManifestContent(existingEntries),
+                created_at: Math.floor(Date.now() / 1000),
+                tags: manifestTags,
+              };
+              const manifestEv = await signEvent(manifestTemplate);
+              const mResults = await publishEvent(manifestEv, relays);
+              const mOk = mResults.filter(r => r.ok).length;
+              setStep("nsite", "done", `Manifest published to ${mOk}/${mResults.length} relays`);
+            } catch (e) {
+              console.warn("Nsite manifest publish failed:", e);
+              setStep("nsite", "error", e.message);
+            }
+
+            current.textContent = "Upload complete! Close this panel and refresh to see the new item.";
+            btn.disabled = false;
+            btn.textContent = "Archive this URL";
+
+          } catch (err) {
+            current.textContent = `Error: ${err.message}`;
+            btn.disabled = false;
+            btn.textContent = "Archive this URL";
+            // Mark any running step as error
+            for (const key of Object.keys(stepEls)) {
+              if (stepEls[key].classList.contains("ingest-step-running")) setStep(key, "error", err.message);
+            }
+          }
+        }
+      });
+    </script>
+
+    <!-- Manifest-based feed: queries kind:35128, injects cards into Latest additions -->
+    <!-- Cards link to /details/sha256 — details-page patch below handles rendering -->
+    <script type="module">
+      (function() {
+        const SETTINGS_KEY = "ia-settings";
+        const DEFAULTS = { blossomUrl: "https://blossom.primal.net", relays: "wss://nos.lol, wss://relay.damus.io, wss://relay.nostr.band" };
+        function getSettings() { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; }
+        function escHtml(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+        function fmtSize(b) { if(!b)return ""; if(b<1024)return b+" B"; if(b<1048576)return (b/1024).toFixed(1)+" KB"; return (b/1048576).toFixed(1)+" MB"; }
+        function inferKind(mime) {
+          if (!mime) return "texts";
+          const m = mime.toLowerCase();
+          if (m.startsWith("video/")) return "video";
+          if (m.startsWith("audio/")) return "audio";
+          if (m.startsWith("image/")) return "images";
+          if (m.includes("zip") || m.includes("tar")) return "software";
+          if (m === "text/html") return "web";
+          return "texts";
+        }
+        const KIND_EMOJI = { video:"🎬", audio:"🎵", images:"🖼", software:"💾", texts:"📄", web:"🌐" };
+
+        // Cache manifest entries for the details page to use
+        window.__MANIFEST_ITEMS__ = window.__MANIFEST_ITEMS__ || {};
+
+        // Cached state — persists across hash changes
+        let _cachedItems = null;
+        let _blossomBase = null;
+        let _cacheTime = 0;
+        const CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+        /**
+         * Stream manifests from relays. Calls onItem() for each parsed item
+         * as it arrives (progressive rendering), resolves when done.
+         */
+        async function streamManifests(relays, onItem) {
+          const filter = { kinds: [35128], limit: 50 };
+          for (const url of relays) {
+            try {
+              const items = await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject("timeout"), 15000);
+                const ws = new WebSocket(url);
+                const collected = [];
+                ws.onopen = () => ws.send(JSON.stringify(["REQ", "mf", filter]));
+                ws.onmessage = (msg) => {
+                  const d = JSON.parse(msg.data);
+                  if (d[0] === "EVENT" && d[2]) {
+                    const manifest = d[2];
+                    let entries = {};
+                    try { entries = JSON.parse(manifest.content || "{}").entries || {}; } catch {}
+                    for (const [path, meta] of Object.entries(entries)) {
+                      const item = {
+                        title: meta.title || path.split("/").pop(),
+                        sha256: meta.sha256,
+                        mime: meta.mime,
+                        size: meta.size,
+                        added: meta.added || manifest.created_at,
+                        path,
+                        manifestId: manifest.id,
+                        manifestPubkey: manifest.pubkey,
+                        topics: meta.topics || [],
+                        source: meta.source || null,
+                        bridgeEventId: meta.bridge_event_id || null,
+                        indexEventId: meta.index_event_id || null,
+                      };
+                      collected.push(item);
+                      onItem(item);
+                    }
+                  }
+                  if (d[0] === "EOSE") { clearTimeout(timeout); ws.close(); resolve(collected); }
+                };
+                ws.onerror = () => { clearTimeout(timeout); reject("ws error"); };
+              });
+              return items;
+            } catch { continue; }
+          }
+          return [];
+        }
+
+        function showError(msg) {
+          const main = document.querySelector("main");
+          if (!main) return;
+          let el = document.getElementById("manifest-error");
+          if (!el) {
+            el = document.createElement("div");
+            el.id = "manifest-error";
+            el.className = "mx-auto max-w-[1280px] px-4 py-6";
+            main.appendChild(el);
+          }
+          el.innerHTML = `<div class="rounded border border-red-300 bg-[var(--color-ia-bg-soft)] p-4 text-sm text-red-600"><strong>Error:</strong> ${msg}</div>`;
+        }
+
+        function showSpinner() {
+          const main = document.querySelector("main");
+          if (!main) return;
+          // Remove previous spinner/error
+          document.getElementById("manifest-spinner")?.remove();
+          document.getElementById("manifest-error")?.remove();
+          const el = document.createElement("div");
+          el.id = "manifest-spinner";
+          el.className = "mx-auto max-w-[1280px] px-4 py-12 text-center";
+          el.innerHTML = `<div class="inline-block h-8 w-8 animate-pulse rounded-full border-4 border-zinc-300 border-t-[var(--color-ia-link)]"></div><div class="mt-3 text-sm text-zinc-500">Loading archive...</div>`;
+          main.appendChild(el);
+        }
+
+        function hideSpinner() {
+          document.getElementById("manifest-spinner")?.remove();
+        }
+
+        /** Check if current hash is a feed-type page (not details/settings) */
+        function isFeedPage() {
+          const h = window.location.hash;
+          return !h || h === "#" || h === "#/" || h.startsWith("#/collection/") || h.startsWith("#/folder/");
+        }
+
+        async function loadFeed() {
+          // Skip if user navigated away from feed pages (e.g. to details)
+          if (!isFeedPage()) return;
+          showSpinner();
+          try {
+          const settings = getSettings();
+          const relays = settings.relays.split(",").map(r => r.trim()).filter(Boolean);
+          const blossomBase = (settings.blossomUrl || "https://blossom.primal.net").replace(/\/$/, "");
+
+          // Check cache
+          const cacheValid = _cachedItems && _cachedItems.length > 0 && _blossomBase === blossomBase && (Date.now() - _cacheTime) < CACHE_TTL;
+          if (cacheValid) {
+            console.log("[manifest-feed] using cache", _cachedItems.length, "items");
+            hideSpinner();
+            renderPage(_cachedItems, blossomBase);
+            return;
+          }
+
+          // Reset cache and render area
+          _cachedItems = [];
+          _blossomBase = blossomBase;
+          _cacheTime = 0;
+          _streamSeen.clear();
+
+          // Prepare the page shell so we can stream cards into it
+          preparePageShell(blossomBase);
+
+          console.log("[manifest-feed] streaming from", relays);
+          const items = await streamManifests(relays, (item) => {
+            // Stream each item into the current grid (only if still on a feed page)
+            _cachedItems.push(item);
+            window.__MANIFEST_ITEMS__[item.sha256] = item;
+            if (isFeedPage()) {
+              appendCardToGrid(item, blossomBase);
+              updateCounts();
+            }
+          });
+
+          hideSpinner();
+          _cacheTime = Date.now();
+
+          // Sort cached items by date (newest first)
+          _cachedItems.sort((a, b) => (b.added || 0) - (a.added || 0));
+          console.log("[manifest-feed]", _cachedItems.length, "items total");
+
+          // Final render with sorted items (only if still on a feed page)
+          if (isFeedPage()) {
+            renderPage(_cachedItems, blossomBase);
+          }
+
+          if (!_cachedItems.length && isFeedPage()) {
+            const main = document.querySelector("main");
+            const isHome = !window.location.hash || window.location.hash === "#" || window.location.hash === "#/";
+            if (isHome && main && !main.querySelector("#manifest-feed-section")) {
+              main.innerHTML = '<div class="mx-auto max-w-[1280px] px-4 py-12 text-center text-zinc-500">No manifests found. Upload files to create your archive.</div>';
+            }
+          }
+          } catch (err) {
+            hideSpinner();
+            console.error("[manifest-feed]", err);
+            showError(err.message || String(err));
+          }
+        }
+
+        // --- Streaming helpers ---
+
+        /** Create the makeCard helper bound to a blossomBase */
+        function makeCardFactory(blossomBase) {
+          return function makeCard(item) {
+            const kind = inferKind(item.mime);
+            const emoji = KIND_EMOJI[kind] || "\u{1F4C4}";
+            const size = fmtSize(item.size);
+            const date = item.added ? new Date(item.added * 1000).toLocaleString(undefined, { year:"numeric", month:"short", day:"numeric" }) : "";
+            const mimeShort = (item.mime || "").split("/").pop().split(";")[0].replace("application/","").replace("text/","");
+
+            const mi = (item.mime || "").toLowerCase();
+            const thumbUrl = `${blossomBase}/${item.sha256}`;
+            const thumbHtml = mi.startsWith("image/")
+              ? `<img src="${thumbUrl}" alt="${escHtml(item.title)}" class="h-full w-full object-cover" loading="lazy">`
+              : `<span class="text-5xl">${emoji}</span>`;
+
+            const card = document.createElement("a");
+            card.href = "#/details/" + item.sha256;
+            card.className = "relative flex flex-col rounded-sm border border-[var(--color-ia-border)] bg-white text-inherit hover:shadow hover:no-underline";
+            card.innerHTML = `
+              <div class="relative aspect-[4/3] w-full overflow-hidden bg-zinc-100 grid place-items-center text-zinc-400">
+                ${thumbHtml}
+              </div>
+              <div class="p-2">
+                <h3 class="text-xs font-semibold leading-snug line-clamp-2">${escHtml(item.title)}</h3>
+                <div class="mt-1.5 flex items-center gap-1 text-[10px] ia-card-meta">
+                  ${mimeShort ? `<span class="ia-card-type rounded-sm bg-zinc-200 px-1 py-0.5 font-mono uppercase text-zinc-600">${escHtml(mimeShort)}</span>` : ""}
+                  <span class="ia-card-size text-zinc-400">${size}</span>
+                  <span class="ia-card-date text-zinc-400">${date}</span>
+                </div>
+              </div>`;
+            card.dataset.sha256 = item.sha256;
+            card.dataset.manifestItem = "1";
+            card.dataset.title = (item.title || "").toLowerCase();
+            return card;
+          };
+        }
+
+        const _streamSeen = new Set();
+
+        /** Prepare empty page shell with grid for streaming */
+        function preparePageShell(blossomBase) {
+          const hash = window.location.hash;
+          const isHomePage = !hash || hash === "#" || hash === "#/";
+          const collectionMatch = hash.match(/^#\/collection\/(.+)$/);
+          const collectionKind = collectionMatch ? collectionMatch[1] : null;
+          const folderMatch = hash.match(/^#\/folder\/(.+)$/);
+          const folderName = folderMatch ? decodeURIComponent(folderMatch[1]) : null;
+          const main = document.querySelector("main");
+          if (!main) return;
+          main.innerHTML = "";
+
+          if (isHomePage) {
+            const hero = document.createElement("section");
+            hero.id = "manifest-hero";
+            hero.className = "bg-gradient-to-b from-[var(--color-ia-nav-hover)] to-[var(--color-ia-nav)] py-8 text-white";
+            hero.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Internet Archive</h1>
+                <p class="mt-1 max-w-3xl text-sm text-white/75">Decentralized archival via Nostr + Blossom. Upload, sync, and share files.</p>
+                <div id="hero-count" class="mt-3 text-xs text-white/55">Loading files...</div>
+              </div>`;
+            main.appendChild(hero);
+
+            const filters = document.createElement("section");
+            filters.id = "manifest-filters";
+            filters.className = "border-b border-[var(--color-ia-border)] bg-white py-4";
+            filters.innerHTML = '<div class="mx-auto max-w-[1280px] px-4" id="filter-badges"></div>';
+            main.appendChild(filters);
+
+            const folders = document.createElement("section");
+            folders.id = "manifest-folders";
+            folders.className = "border-b border-[var(--color-ia-border)] bg-white py-4";
+            folders.innerHTML = '<div class="mx-auto max-w-[1280px] px-4" id="folder-list"></div>';
+            main.appendChild(folders);
+
+            const section = document.createElement("section");
+            section.id = "manifest-feed-section";
+            section.className = "py-6";
+            section.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-500">Latest additions</h2>
+                  <input type="text" id="manifest-search" placeholder="Search files..." class="rounded-sm border border-[var(--color-ia-border)] bg-white px-3 py-1 text-sm text-[var(--color-ia-ink)] placeholder:text-zinc-400 outline-none focus:border-[var(--color-ia-link)]" style="width:200px">
+                </div>
+                <div id="manifest-feed-grid" class="ia-items-grid grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"></div>
+              </div>`;
+            main.appendChild(section);
+          }
+
+          if (collectionKind) {
+            const label = collectionKind.charAt(0).toUpperCase() + collectionKind.slice(1);
+            const emoji = KIND_EMOJI[collectionKind] || "\u{1F4C4}";
+            const breadcrumb = document.createElement("section");
+            breadcrumb.className = "border-b border-[var(--color-ia-border)] bg-[var(--color-ia-bg-soft)] py-4";
+            breadcrumb.innerHTML = `<div class="mx-auto max-w-[1280px] px-4"><nav class="text-[11px] text-zinc-500"><a class="hover:underline" href="#/">Home</a> \u203a <span class="text-zinc-700">${escHtml(label)}</span></nav></div>`;
+            main.appendChild(breadcrumb);
+
+            const section = document.createElement("section");
+            section.id = "manifest-collection-section";
+            section.className = "py-6";
+            section.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 id="collection-title" class="text-sm font-semibold uppercase tracking-wider text-zinc-500">${emoji} ${escHtml(label)} \u2014 <span id="collection-count">0</span> files</h2>
+                  <input type="text" id="manifest-collection-search" placeholder="Search files..." class="rounded-sm border border-[var(--color-ia-border)] bg-white px-3 py-1 text-sm text-[var(--color-ia-ink)] placeholder:text-zinc-400 outline-none focus:border-[var(--color-ia-link)]" style="width:200px">
+                </div>
+                <div id="manifest-collection-grid" class="ia-items-grid grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"></div>
+              </div>`;
+            main.appendChild(section);
+          }
+
+          if (folderName) {
+            const breadcrumb = document.createElement("section");
+            breadcrumb.className = "border-b border-[var(--color-ia-border)] bg-[var(--color-ia-bg-soft)] py-4";
+            breadcrumb.innerHTML = `<div class="mx-auto max-w-[1280px] px-4"><nav class="text-[11px] text-zinc-500"><a class="hover:underline" href="#/">Home</a> \u203a <span class="text-zinc-700">${escHtml(folderName)}</span></nav></div>`;
+            main.appendChild(breadcrumb);
+
+            const section = document.createElement("section");
+            section.id = "manifest-folder-section";
+            section.className = "py-6";
+            section.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 id="folder-title" class="text-sm font-semibold uppercase tracking-wider text-zinc-500">\u{1F4C1} ${escHtml(folderName)} \u2014 <span id="folder-count">0</span> files</h2>
+                  <input type="text" id="manifest-folder-search" placeholder="Search files..." class="rounded-sm border border-[var(--color-ia-border)] bg-white px-3 py-1 text-sm text-[var(--color-ia-ink)] placeholder:text-zinc-400 outline-none focus:border-[var(--color-ia-link)]" style="width:200px">
+                </div>
+                <div id="manifest-folder-grid" class="ia-items-grid grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"></div>
+              </div>`;
+            main.appendChild(section);
+          }
+        }
+
+        /** Append a card to the active grid during streaming */
+        function appendCardToGrid(item, blossomBase) {
+          if (_streamSeen.has(item.sha256)) return;
+          _streamSeen.add(item.sha256);
+          const makeCard = makeCardFactory(blossomBase);
+          const hash = window.location.hash;
+
+          let grid = null;
+          if (!hash || hash === "#" || hash === "#/") {
+            grid = document.getElementById("manifest-feed-grid");
+          } else {
+            const m = hash.match(/^#\/collection\/(.+)$/);
+            if (m && inferKind(item.mime) === m[1]) {
+              grid = document.getElementById("manifest-collection-grid");
+            }
+            const fm = hash.match(/^#\/folder\/(.+)$/);
+            if (fm) {
+              const parts = item.path.split("/").filter(Boolean);
+              if (parts.length >= 2 && parts[0] === decodeURIComponent(fm[1])) {
+                grid = document.getElementById("manifest-folder-grid");
+              }
+            }
+          }
+
+          if (grid) {
+            if ((!hash || hash === "#" || hash === "#/") && grid.children.length >= 24) return;
+            grid.appendChild(makeCard(item));
+          }
+        }
+
+        /** Update count badges during streaming */
+        function updateCounts() {
+          const heroCount = document.getElementById("hero-count");
+          if (heroCount && _cachedItems) heroCount.textContent = _cachedItems.length + " synced files";
+          const collCount = document.getElementById("collection-count");
+          if (collCount) {
+            const m = window.location.hash.match(/^#\/collection\/(.+)$/);
+            if (m) collCount.textContent = _cachedItems.filter(i => inferKind(i.mime) === m[1]).length;
+          }
+          const fCount = document.getElementById("folder-count");
+          if (fCount) {
+            const fm = window.location.hash.match(/^#\/folder\/(.+)$/);
+            if (fm) {
+              fCount.textContent = _cachedItems.filter(i => {
+                const parts = i.path.split("/").filter(Boolean);
+                return parts.length >= 2 && parts[0] === decodeURIComponent(fm[1]);
+              }).length;
+            }
+          }
+        }
+
+        /** Full render of a page from cached/sorted items */
+        function renderPage(items, blossomBase) {
+          // Don't clobber details/settings pages
+          if (!isFeedPage()) return;
+
+          const hash = window.location.hash;
+          const isHomePage = !hash || hash === "#" || hash === "#/";
+          const collectionMatch = hash.match(/^#\/collection\/(.+)$/);
+          const collectionKind = collectionMatch ? collectionMatch[1] : null;
+          const folderMatch = hash.match(/^#\/folder\/(.+)$/);
+          const folderName = folderMatch ? decodeURIComponent(folderMatch[1]) : null;
+
+          // None of the above? Don't render.
+          if (!isHomePage && !collectionKind && !folderName) return;
+
+          const main = document.querySelector("main");
+          if (!main) return;
+          main.innerHTML = "";
+          _streamSeen.clear();
+
+          const makeCard = makeCardFactory(blossomBase);
+
+          // --- Home page ---
+          if (isHomePage) {
+            const manifestCounts = {};
+            for (const item of items) {
+              const k = inferKind(item.mime);
+              manifestCounts[k] = (manifestCounts[k] || 0) + 1;
+            }
+
+            const hero = document.createElement("section");
+            hero.className = "bg-gradient-to-b from-[var(--color-ia-nav-hover)] to-[var(--color-ia-nav)] py-8 text-white";
+            hero.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Internet Archive</h1>
+                <p class="mt-1 max-w-3xl text-sm text-white/75">Decentralized archival via Nostr + Blossom. Upload, sync, and share files.</p>
+                <div class="mt-3 text-xs text-white/55">${items.length} synced files</div>
+              </div>`;
+            main.appendChild(hero);
+
+            const filters = document.createElement("section");
+            filters.className = "border-b border-[var(--color-ia-border)] bg-white py-4";
+            filters.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4 flex flex-wrap gap-3">
+                ${Object.entries(manifestCounts).map(([kind, count]) => {
+                  const emoji = KIND_EMOJI[kind] || "\u{1F4C4}";
+                  const label = kind.charAt(0).toUpperCase() + kind.slice(1);
+                  return `<a href="#/collection/${kind}" class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-ia-border)] bg-white px-4 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50" style="text-decoration:none">${emoji} ${label} <span class="font-semibold text-zinc-900">${count}</span></a>`;
+                }).join('')}
+              </div>`;
+            main.appendChild(filters);
+
+            const folderMap = {};
+            for (const item of items) {
+              const parts = item.path.split("/").filter(Boolean);
+              if (parts.length >= 2) {
+                const root = parts[0];
+                if (!folderMap[root]) folderMap[root] = { count: 0, kind: inferKind(item.mime) };
+                folderMap[root].count++;
+              }
+            }
+            const folderNames = Object.keys(folderMap).sort();
+            if (folderNames.length > 0) {
+              const folderSection = document.createElement("section");
+              folderSection.className = "border-b border-[var(--color-ia-border)] bg-white py-4";
+              folderSection.innerHTML = `
+                <div class="mx-auto max-w-[1280px] px-4">
+                  <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500">Folders</h2>
+                  <div class="flex flex-wrap gap-3">
+                    ${folderNames.map(name => {
+                      const info = folderMap[name];
+                      const emoji = KIND_EMOJI[info.kind] || "\u{1F4C1}";
+                      return `<a href="#/folder/${encodeURIComponent(name)}" class="flex items-center gap-2 rounded border border-[var(--color-ia-border)] bg-white px-4 py-2 text-sm text-zinc-700 hover:shadow hover:no-underline">${emoji} <span class="font-medium">${escHtml(name)}</span> <span class="text-xs text-zinc-400">${info.count} files</span></a>`;
+                    }).join("")}
+                  </div>
+                </div>`;
+              main.appendChild(folderSection);
+            }
+
+            const section = document.createElement("section");
+            section.id = "manifest-feed-section";
+            section.className = "py-6";
+            section.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-500">Latest additions</h2>
+                  <input type="text" id="manifest-search" placeholder="Search files..." class="rounded-sm border border-[var(--color-ia-border)] bg-white px-3 py-1 text-sm text-[var(--color-ia-ink)] placeholder:text-zinc-400 outline-none focus:border-[var(--color-ia-link)]" style="width:200px">
+                </div>
+                <div id="manifest-feed-grid" class="ia-items-grid grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"></div>
+              </div>`;
+            main.appendChild(section);
+
+            const feedGrid = document.getElementById("manifest-feed-grid");
+            const seen = new Set();
+            for (const item of items.slice(0, 24)) {
+              if (seen.has(item.sha256)) continue;
+              seen.add(item.sha256);
+              _streamSeen.add(item.sha256);
+              feedGrid.appendChild(makeCard(item));
+            }
+
+            const searchInput = document.getElementById("manifest-search");
+            if (searchInput) {
+              searchInput.addEventListener("input", () => {
+                const q = searchInput.value.toLowerCase();
+                feedGrid.querySelectorAll("a[data-manifest-item]").forEach(card => {
+                  card.style.display = (card.dataset.title || "").includes(q) ? "" : "none";
+                });
+              });
+            }
+          }
+
+          // --- Collection page ---
+          if (collectionKind) {
+            const collectionItems = items.filter(item => inferKind(item.mime) === collectionKind);
+            const label = collectionKind.charAt(0).toUpperCase() + collectionKind.slice(1);
+            const emoji = KIND_EMOJI[collectionKind] || "\u{1F4C4}";
+
+            const breadcrumb = document.createElement("section");
+            breadcrumb.className = "border-b border-[var(--color-ia-border)] bg-[var(--color-ia-bg-soft)] py-4";
+            breadcrumb.innerHTML = `<div class="mx-auto max-w-[1280px] px-4"><nav class="text-[11px] text-zinc-500"><a class="hover:underline" href="#/">Home</a> \u203a <span class="text-zinc-700">${escHtml(label)}</span></nav></div>`;
+            main.appendChild(breadcrumb);
+
+            const section = document.createElement("section");
+            section.id = "manifest-collection-section";
+            section.className = "py-6";
+            section.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-500">${emoji} ${escHtml(label)} \u2014 ${collectionItems.length} files</h2>
+                  <input type="text" id="manifest-collection-search" placeholder="Search files..." class="rounded-sm border border-[var(--color-ia-border)] bg-white px-3 py-1 text-sm text-[var(--color-ia-ink)] placeholder:text-zinc-400 outline-none focus:border-[var(--color-ia-link)]" style="width:200px">
+                </div>
+                <div id="manifest-collection-grid" class="ia-items-grid grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"></div>
+              </div>`;
+            main.appendChild(section);
+
+            const subFolders = {};
+            for (const item of collectionItems) {
+              const parts = item.path.split("/").filter(Boolean);
+              if (parts.length >= 3) {
+                const sub = parts.slice(1, -1).join("/");
+                if (!subFolders[sub]) subFolders[sub] = 0;
+                subFolders[sub]++;
+              }
+            }
+            const subNames = Object.keys(subFolders).sort();
+            if (subNames.length > 0) {
+              const folderRow = document.createElement("div");
+              folderRow.className = "mb-4 flex flex-wrap gap-2";
+              folderRow.innerHTML = subNames.map(name =>
+                `<span class="inline-flex items-center gap-1 rounded-full border border-[var(--color-ia-border)] bg-white px-3 py-1 text-xs text-zinc-600 cursor-pointer hover:bg-zinc-50" data-folder="${escHtml(name)}">\u{1F4C1} ${escHtml(name)} <span class="text-zinc-400">(${subFolders[name]})</span></span>`
+              ).join("");
+              const collSection = document.querySelector("#manifest-collection-section .mx-auto");
+              if (collSection) {
+                const grid = collSection.querySelector("#manifest-collection-grid");
+                collSection.insertBefore(folderRow, grid);
+                folderRow.querySelectorAll("[data-folder]").forEach(chip => {
+                  chip.addEventListener("click", () => {
+                    const folder = chip.dataset.folder;
+                    grid.querySelectorAll("a[data-manifest-item]").forEach(card => {
+                      const ci = items.find(i => i.sha256 === card.dataset.sha256);
+                      const parts = ci?.path?.split("/").filter(Boolean) || [];
+                      const itemSub = parts.length >= 3 ? parts.slice(1, -1).join("/") : "";
+                      card.style.display = itemSub === folder ? "" : "none";
+                    });
+                    folderRow.querySelectorAll("[data-folder]").forEach(c => c.classList.remove("bg-[var(--color-ia-link)]", "text-white"));
+                    chip.classList.add("bg-[var(--color-ia-link)]", "text-white");
+                  });
+                });
+              }
+            }
+
+            const collGrid = document.getElementById("manifest-collection-grid");
+            for (const item of collectionItems) {
+              _streamSeen.add(item.sha256);
+              collGrid.appendChild(makeCard(item));
+            }
+
+            const collSearch = document.getElementById("manifest-collection-search");
+            if (collSearch) {
+              collSearch.addEventListener("input", () => {
+                const q = collSearch.value.toLowerCase();
+                collGrid.querySelectorAll("a[data-manifest-item]").forEach(card => {
+                  card.style.display = (card.dataset.title || "").includes(q) ? "" : "none";
+                });
+              });
+            }
+          }
+
+          // --- Folder page ---
+          if (folderName) {
+            const folderItems = items.filter(item => {
+              const parts = item.path.split("/").filter(Boolean);
+              return parts.length >= 2 && parts[0] === folderName;
+            });
+
+            const breadcrumb = document.createElement("section");
+            breadcrumb.className = "border-b border-[var(--color-ia-border)] bg-[var(--color-ia-bg-soft)] py-4";
+            breadcrumb.innerHTML = `<div class="mx-auto max-w-[1280px] px-4"><nav class="text-[11px] text-zinc-500"><a class="hover:underline" href="#/">Home</a> \u203a <span class="text-zinc-700">${escHtml(folderName)}</span></nav></div>`;
+            main.appendChild(breadcrumb);
+
+            const section = document.createElement("section");
+            section.id = "manifest-folder-section";
+            section.className = "py-6";
+            section.innerHTML = `
+              <div class="mx-auto max-w-[1280px] px-4">
+                <div class="mb-4 flex items-center justify-between">
+                  <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-500">\u{1F4C1} ${escHtml(folderName)} \u2014 ${folderItems.length} files</h2>
+                  <input type="text" id="manifest-folder-search" placeholder="Search files..." class="rounded-sm border border-[var(--color-ia-border)] bg-white px-3 py-1 text-sm text-[var(--color-ia-ink)] placeholder:text-zinc-400 outline-none focus:border-[var(--color-ia-link)]" style="width:200px">
+                </div>
+                <div id="manifest-folder-grid" class="ia-items-grid grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"></div>
+              </div>`;
+            main.appendChild(section);
+
+            const folderGrid = document.getElementById("manifest-folder-grid");
+            for (const item of folderItems) {
+              _streamSeen.add(item.sha256);
+              folderGrid.appendChild(makeCard(item));
+            }
+
+            const folderSearch = document.getElementById("manifest-folder-search");
+            if (folderSearch) {
+              folderSearch.addEventListener("input", () => {
+                const q = folderSearch.value.toLowerCase();
+                folderGrid.querySelectorAll("a[data-manifest-item]").forEach(card => {
+                  card.style.display = (card.dataset.title || "").includes(q) ? "" : "none";
+                });
+              });
+            }
+          }
+        }
+
+        // --- Navigation ---
+
+        let _feedTimer = null;
+        function scheduleFeedLoad() {
+          if (_feedTimer) clearTimeout(_feedTimer);
+          _feedTimer = setTimeout(loadFeed, 50);
+        }
+
+        // Show spinner on initial load only
+        const _initHash = window.location.hash;
+        if (!_initHash || _initHash === "#" || _initHash === "#/" || _initHash.startsWith("#/collection/") || _initHash.startsWith("#/folder/")) {
+          showSpinner();
+        }
+        setTimeout(loadFeed, 500);
+        setTimeout(loadFeed, 4000);
+
+        // Navigate between pages — cache makes this instant
+        window.addEventListener("hashchange", () => {
+          const hash = window.location.hash;
+          if (hash === "#/" || hash === "#" || hash === "" || hash.startsWith("#/collection/") || hash.startsWith("#/folder/")) {
+            if (_cachedItems && _cacheTime && (Date.now() - _cacheTime) < CACHE_TTL) {
+              renderPage(_cachedItems, _blossomBase);
+            } else {
+              scheduleFeedLoad();
+            }
+          }
+        });
+
+        // --- Page routing: render content into <main> based on hash ---
+        let _currentPage = null;
+
+        function cleanupPage() {
+          document.getElementById("manifest-feed-section")?.remove();
+          document.getElementById("manifest-collection-section")?.remove();
+          document.getElementById("manifest-details-overlay")?.remove();
+          const main = document.querySelector("main");
+          if (main) main.innerHTML = "";
+        }
+
+        function patchDetailsPage() {
+          const hash = window.location.hash;
+          const match = hash.match(/^#\/details\/([0-9a-f]{64})$/);
+          if (!match) return;
+          cleanupPage();
+          const sha256 = match[1];
+          const item = window.__MANIFEST_ITEMS__?.[sha256];
+          if (!item) return;
+
+          const main = document.querySelector("main");
+          if (!main) return;
+
+          const overlay = document.createElement("div");
+          overlay.id = "manifest-details-overlay";
+          renderManifestDetails(overlay, sha256, item);
+          main.appendChild(overlay);
+        }
+
+        function renderManifestDetails(container, sha256, item) {
+          const settings = getSettings();
+          const blossomBase = (settings.blossomUrl || "https://blossom.primal.net").replace(/\/$/, "");
+          const url = `${blossomBase}/${sha256}`;
+          const dateStr = item.added ? new Date(item.added * 1000).toLocaleString() : "Unknown";
+          const m = (item.mime || "").toLowerCase();
+
+          // Build preview content — matches React's MediaViewer exactly
+          let preview = "";
+          let dlButtons = "";
+          // Button bar matching bridge: class="flex gap-2 p-2 bg-zinc-50 border-t border-[var(--color-ia-border)]"
+          const btnBar = `flex gap-2 p-2 bg-zinc-50 border-t border-[var(--color-ia-border)]`;
+          const dlBtnClass = `rounded-sm bg-[var(--color-ia-nav)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-ia-nav-hover)]`;
+          const blossomBtnClass = `rounded-sm border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100`;
+
+          if (m.startsWith("image/")) {
+            preview = `<img src="${url}" alt="${escHtml(item.title)}" style="display:block;max-width:100%;max-height:80vh;object-fit:contain;margin:auto">`;
+            dlButtons = `<div class="${btnBar}"><a href="${url}" download="${escHtml(item.title)}" class="${dlBtnClass}">Download</a><a href="${url}" target="_blank" rel="noopener" class="${blossomBtnClass}">Open on Blossom</a></div>`;
+          } else if (m.startsWith("audio/")) {
+            preview = `<audio controls src="${url}" style="width:100%;display:block"></audio>`;
+            dlButtons = `<div class="${btnBar}"><a href="${url}" download="${escHtml(item.title)}" class="${dlBtnClass}">Download</a><a href="${url}" target="_blank" rel="noopener" class="${blossomBtnClass}">Open on Blossom</a></div>`;
+          } else if (m.startsWith("video/")) {
+            preview = `<video controls src="${url}" style="display:block;max-width:100%;max-height:80vh;margin:auto;background:#000"></video>`;
+            dlButtons = `<div class="${btnBar}"><a href="${url}" download="${escHtml(item.title)}" class="${dlBtnClass}">Download</a><a href="${url}" target="_blank" rel="noopener" class="${blossomBtnClass}">Open on Blossom</a></div>`;
+          } else if (m === "application/pdf") {
+            // Bridge uses: class="block h-[80vh] w-full border-0 bg-zinc-200"
+            preview = `<iframe src="${url}" class="block h-[80vh] w-full border-0 bg-zinc-200"></iframe>`;
+            dlButtons = `<div class="${btnBar}"><a href="${url}" download="${escHtml(item.title)}" class="${dlBtnClass}">Download PDF</a><a href="${url}" target="_blank" rel="noopener" class="${blossomBtnClass}">Open on Blossom</a></div>`;
+          } else if (m === "text/html") {
+            preview = `<iframe sandbox="allow-same-origin" srcdoc="" id="ia-html-preview-${sha256.slice(0,8)}" class="block h-[80vh] w-full border-0 bg-white"></iframe>`;
+            dlButtons = `<div class="${btnBar}"><a href="${url}" download="${escHtml(item.title)}" class="${dlBtnClass}">Download</a><a href="${url}" target="_blank" rel="noopener" class="${blossomBtnClass}">Open Raw</a></div>`;
+            fetch(url).then(r => r.text()).then(html => {
+              const iframe = document.getElementById("ia-html-preview-" + sha256.slice(0,8));
+              if (iframe) iframe.srcdoc = html;
+            });
+          } else if (m.startsWith("text/") || m === "application/json" || m === "application/x-yaml" || m === "text/x-log" || m === "text/csv") {
+            const previewId = "ia-text-preview-" + sha256.slice(0,8);
+            preview = `<pre id="${previewId}" class="max-h-[80vh] overflow-auto bg-zinc-50 p-4 font-mono text-xs leading-relaxed text-zinc-800" style="margin:0">Loading...</pre>`;
+            fetch(url).then(r => r.text()).then(text => {
+              let display = text;
+              if (m === "application/json") try { display = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+              const el = document.getElementById(previewId);
+              if (el) el.textContent = display;
+            });
+          } else {
+            preview = `<div style="display:grid;place-items:center;padding:48px;color:#888"><p>No preview for ${escHtml(item.mime || "unknown")}</p><a href="${url}" style="color:var(--color-ia-link,#2563eb)">Download</a></div>`;
+          }
+
+          // Structure matches bridge page DOM exactly:
+          // main > section.border-b (breadcrumb) + section.mx-auto.grid (content)
+          container.innerHTML = `
+            <section class="border-b border-[var(--color-ia-border)] bg-[var(--color-ia-bg-soft)] py-4">
+              <div class="mx-auto max-w-[1280px] px-4">
+                <nav class="text-[11px] text-zinc-500">
+                  <a class="hover:underline" href="#/">Home</a> › <span class="text-zinc-700">${escHtml(item.title)}</span>
+                </nav>
+              </div>
+            </section>
+            <section class="mx-auto grid max-w-[1280px] gap-6 px-4 py-6 lg:grid-cols-[1fr_360px]">
+              <div>
+                <h1 class="mb-2 text-2xl font-semibold leading-tight">${escHtml(item.title)}</h1>
+                <div class="overflow-hidden rounded border border-[var(--color-ia-border)] bg-white">
+                  ${preview}
+                  ${dlButtons}
+                </div>
+              </div>
+              <aside class="space-y-4">
+                <div class="rounded border border-[var(--color-ia-border)] bg-white p-3">
+                  <h2 class="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Verification</h2>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] font-medium bg-[var(--color-ia-good)]/15 text-[var(--color-ia-good)]"><span class="font-bold">&#10003;</span> signature</span>
+                    <span class="inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] font-medium bg-[var(--color-ia-good)]/15 text-[var(--color-ia-good)]"><span class="font-bold">&#10003;</span> content hash</span>
+                    <span class="inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] font-medium bg-[var(--color-ia-good)]/15 text-[var(--color-ia-good)]"><span class="font-bold">&#10003;</span> stored on Blossom</span>
+                  </div>
+                  <p class="mt-2 text-[11px] text-zinc-500">SHA-256 content-addressed. Manifest signed via NIP-07.</p>
+                </div>
+                <div class="rounded border border-[var(--color-ia-border)] bg-white p-3">
+                  <h2 class="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Metadata</h2>
+                  <dl class="grid grid-cols-[100px_1fr] gap-y-1.5 text-xs">
+                    <dt class="text-zinc-500">Type</dt>
+                    <dd class="text-zinc-800"><code class="bg-zinc-100 px-1 rounded text-[11px]">${escHtml(item.mime || "unknown")}</code></dd>
+                    <dt class="text-zinc-500">Size</dt>
+                    <dd class="text-zinc-800">${fmtSize(item.size)}</dd>
+                    <dt class="text-zinc-500">SHA-256</dt>
+                    <dd class="text-zinc-800 font-mono text-[10px] break-all">${sha256}</dd>
+                    <dt class="text-zinc-500">Published</dt>
+                    <dd class="text-zinc-800">${dateStr}</dd>
+                    <dt class="text-zinc-500">Source</dt>
+                    <dd class="text-zinc-800">kind:35128 manifest</dd>
+                    <dt class="text-zinc-500">Kind</dt>
+                    <dd class="text-zinc-800"><code class="bg-zinc-100 px-1 rounded text-[11px]">${escHtml(item.source?.kind || inferKind(item.mime))}</code></dd>
+                    ${item.topics && item.topics.length ? "<dt class=\"text-zinc-500\">Topics</dt><dd class=\"text-zinc-800\">" + item.topics.map(t => "<span class=\"inline-block rounded-sm bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 mr-1\">" + escHtml(t) + "</span>").join("") + "</dd>" : ""}
+                    <dt class="text-zinc-500">Author</dt>
+                    <dd class="text-zinc-800 font-mono text-[10px] break-all">${item.manifestPubkey || "unknown"}</dd>
+                  </dl>
+                </div>
+              </aside>
+            </section>`;
+        }
+
+        // Run on hash change and on load
+        // Also listen for popstate — React Router may use pushState which
+        // doesn't fire hashchange, but popstate catches it.
+        window.addEventListener("hashchange", patchDetailsPage);
+        window.addEventListener("popstate", patchDetailsPage);
+        // Also poll: React Router's <Link> can bypass both events entirely
+        // by using replaceState. Poll every 500ms when a patch is active.
+        let _lastHash = "";
+        setInterval(() => {
+          const h = window.location.hash;
+          if (h !== _lastHash) {
+            _lastHash = h;
+            patchDetailsPage();
+          }
+        }, 500);
+
+        // Initial page render
+        setTimeout(patchDetailsPage, 1000);
+      })();
+    </script>
+  </body>
+</html>
