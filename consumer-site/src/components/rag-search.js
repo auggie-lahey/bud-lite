@@ -3,7 +3,8 @@
  * Ported from backend status.py. All state in browser, API calls to backend.
  */
 
-import { ragSearch, ragAsk, ragPreview, ragGetSystemPrompt, ragGetPubkeys, getKeyStatus } from '../api/rag.js';
+import { ragSearch, ragAsk, ragPreview, ragGetSystemPrompt, ragGetPubkeys, getKeyStatus, countNotesPerPubkey } from '../api/rag.js';
+import { getSettings, saveSettings } from '../core/settings.js';
 
 function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -96,7 +97,7 @@ export function mountRagChat(container) {
       <div class="ia-chat-messages" id="rag-chat"></div>
       <div class="ia-chat-input-bar">
         <textarea id="rag-input" placeholder="Search or ask a question..." rows="1"></textarea>
-        <button id="rag-ask-btn" ${!keyStatus.qdrant ? 'disabled title="Configure Qdrant URL in Settings"' : ''}>Ask</button>
+        <button id="rag-ask-btn" ${!keyStatus.qdrant ? 'disabled title="Qdrant not configured"' : ''}>Ask</button>
       </div>
     </div>
   `;
@@ -291,10 +292,64 @@ export function mountRagChat(container) {
 
   container.querySelector('#rag-new-session').onclick = newSession;
 
+  // ── Key prompt modal ───────────────────────────────────────
+  function showKeyPrompt(missingKey) {
+    return new Promise((resolve) => {
+      const existing = document.getElementById('ia-key-modal');
+      if (existing) existing.remove();
+
+      const labels = {
+        llm: { title: 'LLM API Key Required', placeholder: 'sk-...', field: 'llmApiKey', hint: 'Needed to generate answers. Supports Anthropic, OpenAI-compatible APIs.' },
+        hf: { title: 'HuggingFace API Key', placeholder: 'hf_...', field: 'hfApiKey', hint: 'Optional. Free tier works without it, but a key is faster.' },
+      };
+      const info = labels[missingKey] || labels.llm;
+
+      const modal = document.createElement('div');
+      modal.id = 'ia-key-modal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6)';
+      modal.innerHTML = `
+        <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:1.5em;max-width:400px;width:90%">
+          <h3 style="margin:0 0 0.5em;color:#6ee7b7;font-size:1rem">${info.title}</h3>
+          <p style="color:#888;font-size:0.8rem;margin:0 0 1em">${info.hint}</p>
+          <input id="ia-key-input" type="password" placeholder="${info.placeholder}"
+            style="width:100%;padding:0.5em 0.7em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
+          <div style="display:flex;gap:0.5em;margin-top:1em;justify-content:flex-end">
+            <button id="ia-key-cancel" style="padding:0.4em 1em;background:transparent;border:1px solid #444;border-radius:6px;color:#888;cursor:pointer">Cancel</button>
+            <button id="ia-key-save" style="padding:0.4em 1em;background:#6ee7b7;border:none;border-radius:6px;color:#0f1117;cursor:pointer;font-weight:600">Save</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+
+      const input = modal.querySelector('#ia-key-input');
+      input.focus();
+      modal.querySelector('#ia-key-cancel').onclick = () => { modal.remove(); resolve(false); };
+      modal.querySelector('#ia-key-save').onclick = () => {
+        const val = input.value.trim();
+        if (val) {
+          const s = getSettings();
+          s[info.field] = val;
+          saveSettings(s);
+        }
+        modal.remove();
+        resolve(true);
+      };
+      input.onkeydown = (e) => { if (e.key === 'Enter') modal.querySelector('#ia-key-save').click(); };
+      modal.onclick = (e) => { if (e.target === modal) { modal.remove(); resolve(false); } };
+    });
+  }
+
   // ── Submit logic ───────────────────────────────────────────
   async function submitAsk() {
     const q = inputEl.value.trim();
     if (!q) return;
+
+    // Check for required keys
+    const keys = getKeyStatus();
+    if (isQuestion(q) && !keys.llm) {
+      const saved = await showKeyPrompt('llm');
+      if (!saved) return;
+    }
+
     inputEl.value = '';
     inputEl.style.height = 'auto';
     askBtn.disabled = true;
