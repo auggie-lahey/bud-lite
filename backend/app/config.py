@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     blossom_data_dir: str = "./data/blobs"
 
     # Content filtering
-    min_content_length: int = 150
+    min_content_length: int = 20
 
     # Dev defaults (pre-filled in landing page UI only, NOT used server-side)
     dev_llm_key: str = ""
