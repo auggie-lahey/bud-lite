@@ -160,7 +160,7 @@ export function mountRagChat(container) {
 
   function getBackendUrl() {
     const s = JSON.parse(localStorage.getItem('ia-settings') || '{}');
-    return (s.qdrantUrl || '').replace(/\/$/, '');
+    return (s.ragBackendUrl || '').replace(/\/$/, '');
   }
 
   loadPubkeys();
