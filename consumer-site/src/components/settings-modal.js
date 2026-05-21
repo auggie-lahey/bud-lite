@@ -30,7 +30,7 @@ export function mountSettingsModal(store) {
     // Qdrant
     document.getElementById('set-qdrant-url').value = s.qdrantUrl || '';
     document.getElementById('set-qdrant-key').value = s.qdrantApiKey || '';
-    document.getElementById('set-qdrant-collection').value = s.qdrantCollection || 'nostr-rag';
+    document.getElementById('set-qdrant-collection').value = s.qdrantCollection || 'nostr_rag';
     // API keys
     document.getElementById('set-hf-key').value = s.hfApiKey || '';
     document.getElementById('set-llm-key').value = s.llmApiKey || '';
@@ -61,7 +61,7 @@ export function mountSettingsModal(store) {
       // Qdrant
       qdrantUrl: document.getElementById('set-qdrant-url').value.trim(),
       qdrantApiKey: document.getElementById('set-qdrant-key').value.trim(),
-      qdrantCollection: document.getElementById('set-qdrant-collection').value.trim() || 'nostr-rag',
+      qdrantCollection: document.getElementById('set-qdrant-collection').value.trim() || 'nostr_rag',
       // API keys
       hfApiKey: document.getElementById('set-hf-key').value.trim(),
       llmApiKey: document.getElementById('set-llm-key').value.trim(),

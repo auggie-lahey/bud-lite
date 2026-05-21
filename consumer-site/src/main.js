@@ -144,7 +144,7 @@ app.innerHTML = `
           </label>
           <label>
             Qdrant Collection
-            <input type="text" id="set-qdrant-collection" placeholder="nostr-rag">
+            <input type="text" id="set-qdrant-collection" placeholder="nostr_rag">
           </label>
           <hr style="border-color:#333;margin:0.8em 0">
           <h3 style="margin:0 0 0.5em;font-size:0.95rem;color:#6ee7b7">API Keys</h3>
