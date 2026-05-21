@@ -44,8 +44,8 @@ function getLLMConfig() {
   const s = getSettings();
   return {
     apiKey: s.llmApiKey || '',
-    baseUrl: (s.llmBaseUrl || 'https://api.anthropic.com').replace(/\/$/, ''),
-    model: s.llmModel || 'claude-sonnet-4-5-20250514',
+    baseUrl: (s.llmBaseUrl || 'https://api.z.ai/api/paas/v4').replace(/\/$/, ''),
+    model: s.llmModel || 'GLM-4.5-air',
   };
 }
 
@@ -212,27 +212,61 @@ export async function getQdrantInfo() {
   }
 }
 
-// ── LLM via Anthropic-compatible API ────────────────────────────
+// ── LLM via OpenAI-compatible API ─────────────────────────────────
 
 /**
  * Call LLM for synthesis. Returns generated text.
+ * Supports OpenAI-compatible APIs (z.ai, OpenAI, etc.) and Anthropic.
  */
 export async function askLLM(systemPrompt, userMessage) {
   const { apiKey, baseUrl, model } = getLLMConfig();
   if (!apiKey) throw new Error('LLM API key not configured');
 
-  const resp = await fetch(`${baseUrl}/v1/messages`, {
+  // Auto-detect API format based on base URL
+  const isAnthropic = baseUrl.includes('anthropic.com');
+  const isZai = baseUrl.includes('z.ai');
+
+  if (isAnthropic) {
+    // Anthropic format
+    const resp = await fetch(`${baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text().catch(() => '');
+      throw new Error(`LLM call failed (${resp.status}): ${err}`);
+    }
+    const data = await resp.json();
+    return data.content[0].text;
+  }
+
+  // OpenAI-compatible format (z.ai, OpenAI, etc.)
+  const endpoint = baseUrl.endsWith('/v4') || baseUrl.endsWith('/v4/')
+    ? `${baseUrl}/chat/completions`
+    : `${baseUrl}/v1/chat/completions`;
+  const resp = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model,
       max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
     }),
   });
 
@@ -242,7 +276,7 @@ export async function askLLM(systemPrompt, userMessage) {
   }
 
   const data = await resp.json();
-  return data.content[0].text;
+  return data.choices[0].message.content;
 }
 
 // ── High-level RAG functions ────────────────────────────────────

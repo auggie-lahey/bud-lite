@@ -313,17 +313,17 @@ export function mountRagChat(container) {
           <p style="color:#888;font-size:0.75rem;margin:0 0 1em">Chat uses two APIs: <strong>HuggingFace</strong> (embeds your question for search, free without a key) and an <strong>LLM</strong> (generates the answer). Both keys stored in your browser only.</p>
           <label style="display:block;margin-bottom:0.8em">
             <span style="color:#aaa;font-size:0.75rem">API Key</span>
-            <input id="ia-key-input" type="password" placeholder="sk-..."
+            <input id="ia-key-input" type="password" placeholder="Your API key"
               style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
           </label>
           <label style="display:block;margin-bottom:0.8em">
             <span style="color:#aaa;font-size:0.75rem">API Endpoint</span>
-            <input id="ia-key-url" type="text" placeholder="https://api.anthropic.com"
+            <input id="ia-key-url" type="text" placeholder="https://api.z.ai/api/paas/v4"
               style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
           </label>
           <label style="display:block;margin-bottom:0.8em">
             <span style="color:#aaa;font-size:0.75rem">Model</span>
-            <input id="ia-key-model" type="text" placeholder="claude-sonnet-4-5-20250514"
+            <input id="ia-key-model" type="text" placeholder="GLM-4.5-air"
               style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
           </label>
           <div style="display:flex;gap:0.5em;margin-top:0.5em;justify-content:flex-end">
