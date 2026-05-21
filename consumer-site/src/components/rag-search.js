@@ -159,7 +159,8 @@ export function mountRagChat(container) {
       const imgHtml = p.picture
         ? `<img src="${esc(p.picture)}" class="pfp-img"><span class="no-pfp">${initial}</span>`
         : `<span class="no-pfp">${initial}</span>`;
-      const tooltipHtml = p.micro ? `<div class="ia-chip-tooltip">${esc(p.micro)}</div>` : '';
+      const profileLink = `https://primal.net/p/${p.pubkey}`;
+      const tooltipHtml = p.micro ? `<div class="ia-chip-tooltip">${esc(p.micro)} <a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">profile ↗</a></div>` : `<div class="ia-chip-tooltip"><a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">View profile ↗</a></div>`;
       chip.innerHTML = imgHtml + `<span>${esc(name)}</span>${countHtml}` + tooltipHtml;
       chip.onclick = () => {
         if (activePubkeys.has(p.pubkey)) {
@@ -417,9 +418,10 @@ export function mountRagChat(container) {
             const s = data.sources[i];
             const d = s.date ? new Date(s.date * 1000).toLocaleDateString() : '';
             const link = s.event_id ? `<a class="ia-primal-link" href="${primalLink(s.event_id, s.kind)}" target="_blank">open ↗</a>` : '';
+            const profileLink = s.pubkey ? `<a class="ia-primal-link" href="https://primal.net/p/${s.pubkey}" target="_blank">${esc(s.author)}</a>` : esc(s.author);
             sourcesHtml += `<div class="ia-src-note" id="src-${msgId}-${i}">`
               + `<div class="ia-src-header"><span class="ia-src-num">[${i + 1}]</span> `
-              + `<span style="color:#93c5fd">${esc(s.author)}</span> `
+              + `<span style="color:#93c5fd">${profileLink}</span> `
               + `<span class="meta">${d} ${(s.score * 100).toFixed(0)}%</span> `
               + link
               + '</div>'
