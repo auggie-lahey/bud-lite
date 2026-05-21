@@ -305,7 +305,7 @@ export function mountRagChat(container) {
       if (existing) existing.remove();
 
       const labels = {
-        llm: { title: 'LLM API Key Required', placeholder: 'sk-...', field: 'llmApiKey', hint: 'Needed to generate answers. Supports Anthropic, OpenAI-compatible APIs.' },
+        llm: { title: 'LLM API Key Required', placeholder: 'sk-...', field: 'llmApiKey', hint: 'Needed to generate answers. Stored in your browser only — never sent to any server.' },
         hf: { title: 'HuggingFace API Key', placeholder: 'hf_...', field: 'hfApiKey', hint: 'Optional. Free tier works without it, but a key is faster.' },
       };
       const info = labels[missingKey] || labels.llm;
