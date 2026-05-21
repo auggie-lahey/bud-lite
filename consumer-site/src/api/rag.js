@@ -38,6 +38,10 @@ function getQdrantConfig() {
   if (url && url.includes('cloud.qdrant.io') && !url.match(/:\d+/)) {
     url += ':6333';
   }
+  // Browser requests to Qdrant Cloud need CORS proxy (preflight blocked on OPTIONS)
+  if (url && typeof window !== 'undefined' && url.includes('cloud.qdrant.io')) {
+    url = 'https://corsproxy.io/?' + encodeURIComponent(url);
+  }
   return {
     url,
     apiKey: s.qdrantApiKey || deployed.readOnlyKey || '',
