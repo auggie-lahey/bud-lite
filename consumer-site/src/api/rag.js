@@ -64,7 +64,7 @@ function getHFConfig() {
  */
 export async function embedText(text) {
   const { apiKey, model } = getHFConfig();
-  const url = `https://api-inference.huggingface.co/models/${model}`;
+  const url = `https://router.huggingface.co/hf-inference/models/${model}`;
 
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
@@ -93,7 +93,7 @@ export async function embedText(text) {
  */
 export async function embedTexts(texts) {
   const { apiKey, model } = getHFConfig();
-  const url = `https://api-inference.huggingface.co/models/${model}`;
+  const url = `https://router.huggingface.co/hf-inference/models/${model}`;
 
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
