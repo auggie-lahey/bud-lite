@@ -509,6 +509,18 @@ const router = createRouter([
   { pattern: /^\/about$/,                   handler: aboutPage },
 ], store);
 
+// Hide footer on chat page (full-height chat needs the space)
+router.onNavigate = (path) => {
+  const footer = document.querySelector('footer');
+  if (footer) footer.style.display = path === '/chat' ? 'none' : '';
+};
+// Also run on initial load
+{
+  const path = location.hash.replace(/^#/, '') || '/';
+  const footer = document.querySelector('footer');
+  if (footer) footer.style.display = path === '/chat' ? 'none' : '';
+}
+
 // ── Initial feed load ──────────────────────────────────────
 
 async function onUserChange(user) {

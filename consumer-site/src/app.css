@@ -679,7 +679,7 @@ html[data-view="list"] .ia-dropdown { top: auto; left: auto; right: 4px; bottom:
 .ia-rag-source-author { color: #93c5fd; font-weight: 600; }
 
 /* ── Chat page ───────────────────────────────────────────────── */
-.ia-chat-page { display: flex; flex-direction: column; height: calc(100vh - 48px); }
+.ia-chat-page { display: flex; flex-direction: column; height: 100%; }
 .ia-chat-user-bar { display: flex; gap: 0.4em; padding: 0.4em 0.8em; border-bottom: 1px solid var(--color-ia-border); flex-wrap: wrap; align-items: center; }
 .ia-chat-user-bar .ub-label { font-size: 0.7rem; color: #666; margin-right: 0.2em; }
 .ia-user-chip { display: flex; align-items: center; gap: 0.35em; padding: 0.25em 0.6em 0.25em 0.3em;
