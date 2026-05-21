@@ -29,8 +29,12 @@ export function getSettings() {
     // Migration: fix old hyphenated collection name
     if (merged.qdrantCollection === 'nostr-rag') {
       merged.qdrantCollection = 'nostr_rag';
-      saveSettings(merged);
     }
+    // Migration: fix old anthropic/z.ai URLs
+    if (merged.llmBaseUrl === 'https://api.anthropic.com' || merged.llmBaseUrl === 'https://api.z.ai/api/paas/v4') {
+      merged.llmBaseUrl = 'https://api.z.ai/api/coding/paas/v4';
+    }
+    saveSettings(merged);
     return merged;
   } catch {
     return { ...DEFAULTS };
