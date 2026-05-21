@@ -1,6 +1,6 @@
 /**
  * Direct API client — calls HuggingFace, Qdrant, and LLM APIs from the browser.
- * No backend server needed. All keys stored in browser localStorage.
+ * No backend server needed. Keys from deployed config or browser localStorage.
  */
 
 import { getSettings } from '../core/settings.js';
