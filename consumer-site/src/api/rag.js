@@ -30,21 +30,19 @@ function getDeployedQdrant() {
 
 // ── Config helpers ─────────────────────────────────────────────
 
+const CORS_PROXY = 'https://proxy-hw1qvwkvqjc4.auggie-lahey.deno.net';
+
 function getQdrantConfig() {
   const s = getSettings();
   const deployed = getDeployedQdrant();
-  let url = (s.qdrantUrl || deployed.url || '').replace(/\/$/, '');
-  // Qdrant Cloud REST API needs explicit port 6333
-  if (url && url.includes('cloud.qdrant.io') && !url.match(/:\d+/)) {
-    url += ':6333';
-  }
-  // Browser requests to Qdrant Cloud need CORS proxy (preflight blocked on OPTIONS)
-  if (url && typeof window !== 'undefined' && url.includes('cloud.qdrant.io')) {
-    url = 'https://corsproxy.io/?' + encodeURIComponent(url);
-  }
+  // In browser, route through CORS proxy (Qdrant Cloud blocks OPTIONS preflight)
+  // Proxy holds the API key server-side, so we don't send it from browser
+  const url = typeof window !== 'undefined'
+    ? CORS_PROXY
+    : (s.qdrantUrl || deployed.url || '').replace(/\/$/, '');
   return {
     url,
-    apiKey: s.qdrantApiKey || deployed.readOnlyKey || '',
+    apiKey: '', // Proxy handles auth
     collection: s.qdrantCollection || 'nostr_rag',
   };
 }
