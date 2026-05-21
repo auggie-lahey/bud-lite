@@ -145,7 +145,7 @@ export async function countNotesPerPubkey(pubkeys) {
 function qdrantHeaders() {
   const { apiKey } = getQdrantConfig();
   const h = { 'Content-Type': 'application/json' };
-  if (apiKey) h['api-key'] = apiKey;
+  if (apiKey) h['Authorization'] = `Bearer ${apiKey}`;
   return h;
 }
 
