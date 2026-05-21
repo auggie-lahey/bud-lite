@@ -62,6 +62,8 @@ function getHFConfig() {
 
 // ── Embedding via HuggingFace Inference API ─────────────────────
 
+import { HfInference } from '@huggingface/inference';
+
 /**
  * Embed a single text string.
  */
@@ -72,29 +74,20 @@ export async function embedText(text) {
 
 /**
  * Embed multiple texts in batch via HuggingFace.
- * Uses Bearer auth to avoid CORS preflight issues.
+ * Uses the official @huggingface/inference library for proper CORS handling.
  */
 export async function embedTexts(texts) {
   const { apiKey, model } = getHFConfig();
-  if (!apiKey) throw new Error('HuggingFace API key required for search. Add one in the setup prompt or Settings.');
+  if (!apiKey) throw new Error('HuggingFace API key required for search.');
 
-  const url = `https://router.huggingface.co/hf-inference/models/${model}`;
-
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({ inputs: texts }),
+  const hf = new HfInference(apiKey);
+  const results = await hf.featureExtraction({
+    model,
+    inputs: texts,
   });
 
-  if (!resp.ok) {
-    const err = await resp.text().catch(() => '');
-    throw new Error(`Embedding failed (${resp.status}): ${err}`);
-  }
-
-  return resp.json();
+  // featureExtraction returns number[][] for batch input
+  return results;
 }
 
 // ── Qdrant direct queries ───────────────────────────────────────
