@@ -302,18 +302,27 @@ function formatContext(notes) {
  */
 async function loadSoulHints(pubkeys) {
   try {
-    const resp = await fetch('/soul-hints.json');
+    const resp = await fetch(`${import.meta.env.BASE_URL}soul-hints.json`);
     if (!resp.ok) return '';
     const data = await resp.json();
     const hints = data.hints || {};
     const micros = data.micros || {};
+    const labels = data.labels || {};
     const lines = ['=== Group Members (compact profiles) ==='];
-    for (const [pk, hint] of Object.entries(hints)) {
+    // Use hints if available, otherwise fall back to micros + labels
+    const allPks = Object.keys(hints).length ? Object.keys(hints) : Object.keys(micros);
+    for (const pk of allPks) {
       if (pubkeys.length && !pubkeys.includes(pk)) continue;
-      const label = hint.split('\n')[0].replace(/\*\*/g, '').trim() || pk.slice(0, 8);
-      lines.push(`**${label}**: ${hint}`);
+      if (hints[pk]) {
+        const label = hints[pk].split('\n')[0].replace(/\*\*/g, '').trim() || pk.slice(0, 8);
+        lines.push(`**${label}**: ${hints[pk]}`);
+      } else {
+        const label = labels[pk] || pk.slice(0, 8);
+        const micro = micros[pk] || '';
+        lines.push(`**${label}**: ${micro}`);
+      }
     }
-    return lines.join('\n');
+    return lines.length > 1 ? lines.join('\n') : '';
   } catch {
     return '';
   }
