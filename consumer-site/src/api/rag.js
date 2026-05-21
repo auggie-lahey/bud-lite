@@ -57,22 +57,51 @@ function getHFConfig() {
   };
 }
 
-// ── Embedding via HuggingFace Inference API ─────────────────────
+// ── Embedding via LLM endpoint (OpenAI-compatible) ──────────────────
 
 /**
- * Embed a single text string. Returns 384-dim vector.
+ * Embed a single text string using the configured LLM endpoint.
+ * Falls back to HF only if a separate HF key is configured.
  */
 export async function embedText(text) {
-  const { apiKey, model } = getHFConfig();
-  const url = `https://router.huggingface.co/hf-inference/models/${model}`;
+  const vectors = await embedTexts([text]);
+  return vectors[0];
+}
 
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+/**
+ * Embed multiple texts. Uses LLM endpoint's /v1/embeddings (OpenAI format).
+ * Falls back to HF Inference API if user has an HF key configured.
+ */
+export async function embedTexts(texts) {
+  const llm = getLLMConfig();
+  const hf = getHFConfig();
 
-  const resp = await fetch(url, {
+  // Prefer HF if user has a key configured (better embedding models)
+  if (hf.apiKey) {
+    return embedViaHF(texts, hf);
+  }
+
+  // Use LLM endpoint (OpenAI-compatible /v1/embeddings)
+  return embedViaLLM(texts, llm);
+}
+
+async function embedViaLLM(texts, { apiKey, baseUrl }) {
+  if (!apiKey) throw new Error('API key not configured. Add one in Settings or the setup prompt.');
+
+  const endpoint = baseUrl.endsWith('/v4') || baseUrl.endsWith('/v4/')
+    ? `${baseUrl}/embeddings`
+    : `${baseUrl}/v1/embeddings`;
+
+  const resp = await fetch(endpoint, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ inputs: text }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'embedding-3',
+      input: texts,
+    }),
   });
 
   if (!resp.ok) {
@@ -81,20 +110,12 @@ export async function embedText(text) {
   }
 
   const data = await resp.json();
-  // HF returns the embedding array directly for single inputs
-  if (Array.isArray(data) && data.length > 0) {
-    return Array.isArray(data[0]) ? data[0] : data;
-  }
-  throw new Error('Unexpected embedding response format');
+  // OpenAI format: { data: [{ embedding: [...] }] }
+  return data.data.map(d => d.embedding);
 }
 
-/**
- * Embed multiple texts in batch.
- */
-export async function embedTexts(texts) {
-  const { apiKey, model } = getHFConfig();
+async function embedViaHF(texts, { apiKey, model }) {
   const url = `https://router.huggingface.co/hf-inference/models/${model}`;
-
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
@@ -106,7 +127,7 @@ export async function embedTexts(texts) {
 
   if (!resp.ok) {
     const err = await resp.text().catch(() => '');
-    throw new Error(`Batch embedding failed (${resp.status}): ${err}`);
+    throw new Error(`HF embedding failed (${resp.status}): ${err}`);
   }
 
   return resp.json();
