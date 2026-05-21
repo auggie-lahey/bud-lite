@@ -329,25 +329,25 @@ async function loadSoulHints(pubkeys) {
 }
 
 /**
- * Select notes: at least 1 per active pubkey, then all above 0.3 threshold.
+ * Select notes: at least 1 per unique pubkey in results, then all above 0.3 threshold.
  */
 function selectNotes(rawNotes, activePubkeys, limit) {
   const pkSet = new Set(activePubkeys || []);
 
   const highScore = rawNotes.filter(n => n.score >= 0.3);
 
-  // Ensure at least 1 note per active user
+  // Ensure at least 1 note per unique pubkey
   const seenPubkeys = new Set(highScore.map(n => n.pubkey));
   const guaranteed = [];
-  if (pkSet.size) {
-    for (const pk of pkSet) {
-      if (!seenPubkeys.has(pk)) {
-        let best = null;
-        for (const n of rawNotes) {
-          if (n.pubkey === pk && (!best || n.score > best.score)) best = n;
-        }
-        if (best) guaranteed.push(best);
+  // Use explicit pubkeys if provided, otherwise all unique pubkeys in results
+  const allPks = pkSet.size > 0 ? pkSet : new Set(rawNotes.map(n => n.pubkey));
+  for (const pk of allPks) {
+    if (!seenPubkeys.has(pk)) {
+      let best = null;
+      for (const n of rawNotes) {
+        if (n.pubkey === pk && (!best || n.score > best.score)) best = n;
       }
+      if (best) guaranteed.push(best);
     }
   }
 
@@ -379,8 +379,8 @@ export async function ragAsk(question, { limit = 10, pubkeys = [] } = {}) {
   // 1. Embed query
   const vector = await embedText(question);
 
-  // 2. Search Qdrant (fetch extra for filtering)
-  const rawNotes = await searchQdrant(vector, { limit: limit * 2, pubkeys });
+  // 2. Search Qdrant (fetch extra for per-pubkey coverage)
+  const rawNotes = await searchQdrant(vector, { limit: limit * 3, pubkeys });
 
   // 3. Select notes
   const [notes, lowConfidence] = selectNotes(rawNotes, pubkeys, limit);
