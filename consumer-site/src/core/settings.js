@@ -12,12 +12,12 @@ const DEFAULTS = {
   // Qdrant — auto-configured from deployed config or manual entry
   qdrantUrl: '',
   qdrantApiKey: '',
-  qdrantCollection: 'nostr-rag',
+  qdrantCollection: 'nostr_rag',
   // API keys — stored in browser only, sent per-request
   hfApiKey: '',
   llmApiKey: '',
-  llmBaseUrl: 'https://api.anthropic.com',
-  llmModel: 'claude-sonnet-4-5-20250514',
+  llmBaseUrl: 'https://api.z.ai/api/paas/v4',
+  llmModel: 'GLM-5.1',
   groqApiKey: '',
   geminiApiKey: '',
 };

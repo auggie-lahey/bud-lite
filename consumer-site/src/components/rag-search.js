@@ -118,10 +118,10 @@ export function mountRagChat(container) {
   // ── Load system prompt ─────────────────────────────────────
   ragGetSystemPrompt().then(p => { cachedSystemPrompt = p; }).catch(() => {});
 
-  // ── Prompt for LLM key on load if missing ──────────────────
+  // ── Prompt for keys on load if missing ──────────────────────
   const keys = getKeyStatus();
   if (!keys.llm) {
-    showKeyPrompt('llm');
+    showSetupPrompt();
   }
 
   // ── User filter chips ──────────────────────────────────────
@@ -298,63 +298,64 @@ export function mountRagChat(container) {
 
   container.querySelector('#rag-new-session').onclick = newSession;
 
-  // ── Key prompt modal ───────────────────────────────────────
-  function showKeyPrompt(missingKey) {
-    return new Promise((resolve) => {
-      const existing = document.getElementById('ia-key-modal');
-      if (existing) existing.remove();
+  // ── Setup prompt modal ───────────────────────────────────────
+  function showSetupPrompt() {
+    const existing = document.getElementById('ia-key-modal');
+    if (existing) existing.remove();
 
-      const modal = document.createElement('div');
-      modal.id = 'ia-key-modal';
-      modal.style.cssText = 'position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6)';
-      modal.innerHTML = `
-        <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:1.5em;max-width:440px;width:90%">
-          <h3 style="margin:0 0 0.5em;color:#6ee7b7;font-size:1rem">Configure LLM</h3>
-          <p style="color:#888;font-size:0.75rem;margin:0 0 1em">Chat uses two APIs: <strong>HuggingFace</strong> (embeds your question for search, free without a key) and an <strong>LLM</strong> (generates the answer). Both keys stored in your browser only.</p>
-          <label style="display:block;margin-bottom:0.8em">
-            <span style="color:#aaa;font-size:0.75rem">API Key</span>
-            <input id="ia-key-input" type="password" placeholder="Your API key"
-              style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
-          </label>
-          <label style="display:block;margin-bottom:0.8em">
-            <span style="color:#aaa;font-size:0.75rem">API Endpoint</span>
-            <input id="ia-key-url" type="text" placeholder="https://api.z.ai/api/paas/v4"
-              style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
-          </label>
-          <label style="display:block;margin-bottom:0.8em">
-            <span style="color:#aaa;font-size:0.75rem">Model</span>
-            <input id="ia-key-model" type="text" placeholder="GLM-5.1"
-              style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
-          </label>
-          <div style="display:flex;gap:0.5em;margin-top:0.5em;justify-content:flex-end">
-            <button id="ia-key-cancel" style="padding:0.4em 1em;background:transparent;border:1px solid #444;border-radius:6px;color:#888;cursor:pointer">Cancel</button>
-            <button id="ia-key-save" style="padding:0.4em 1em;background:#6ee7b7;border:none;border-radius:6px;color:#0f1117;cursor:pointer;font-weight:600">Save</button>
-          </div>
-        </div>`;
-      document.body.appendChild(modal);
+    const current = getSettings();
+    const hasLLM = Boolean(current.llmApiKey);
 
-      // Pre-fill existing values
-      const current = getSettings();
-      const keyInput = modal.querySelector('#ia-key-input');
-      const urlInput = modal.querySelector('#ia-key-url');
-      const modelInput = modal.querySelector('#ia-key-model');
-      if (current.llmApiKey) keyInput.value = current.llmApiKey;
-      if (current.llmBaseUrl) urlInput.value = current.llmBaseUrl;
-      if (current.llmModel) modelInput.value = current.llmModel;
-      keyInput.focus();
+    const modal = document.createElement('div');
+    modal.id = 'ia-key-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6)';
+    modal.innerHTML = `
+      <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:1.5em;max-width:440px;width:90%">
+        <h3 style="margin:0 0 0.5em;color:#6ee7b7;font-size:1rem">Setup Required</h3>
+        <p style="color:#888;font-size:0.75rem;margin:0 0 1em">
+          Enter your LLM API key to generate answers. Key stored in your browser only.
+        </p>
+        <label style="display:block;margin-bottom:0.6em">
+          <span style="color:#aaa;font-size:0.75rem">LLM API Key ${hasLLM ? '✓' : '<span style="color:#f87171">required</span>'}</span>
+          <input id="ia-key-input" type="password" placeholder="Your API key" ${hasLLM ? 'value="••••••••"' : ''}
+            style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid ${hasLLM ? '#333' : '#f87171'};border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
+        </label>
+        <label style="display:block;margin-bottom:0.6em">
+          <span style="color:#aaa;font-size:0.75rem">API Endpoint</span>
+          <input id="ia-key-url" type="text" placeholder="https://api.z.ai/api/paas/v4"
+            style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
+        </label>
+        <label style="display:block;margin-bottom:0.6em">
+          <span style="color:#aaa;font-size:0.75rem">Model</span>
+          <input id="ia-key-model" type="text" placeholder="GLM-5.1"
+            style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
+        </label>
+        <div style="display:flex;gap:0.5em;margin-top:0.5em;justify-content:flex-end">
+          <button id="ia-key-cancel" style="padding:0.4em 1em;background:transparent;border:1px solid #444;border-radius:6px;color:#888;cursor:pointer">Cancel</button>
+          <button id="ia-key-save" style="padding:0.4em 1em;background:#6ee7b7;border:none;border-radius:6px;color:#0f1117;cursor:pointer;font-weight:600">Save</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
 
-      modal.querySelector('#ia-key-cancel').onclick = () => { modal.remove(); resolve(false); };
-      modal.querySelector('#ia-key-save').onclick = () => {
-        const s = getSettings();
-        if (keyInput.value.trim()) s.llmApiKey = keyInput.value.trim();
-        if (urlInput.value.trim()) s.llmBaseUrl = urlInput.value.trim();
-        if (modelInput.value.trim()) s.llmModel = modelInput.value.trim();
-        saveSettings(s);
-        modal.remove();
-        resolve(true);
-      };
-      modal.onclick = (e) => { if (e.target === modal) { modal.remove(); resolve(false); } };
-    });
+    // Pre-fill existing values
+    const keyInput = modal.querySelector('#ia-key-input');
+    const urlInput = modal.querySelector('#ia-key-url');
+    const modelInput = modal.querySelector('#ia-key-model');
+    if (hasLLM) urlInput.value = current.llmBaseUrl;
+    if (hasLLM) modelInput.value = current.llmModel;
+    keyInput.focus();
+
+    modal.querySelector('#ia-key-cancel').onclick = () => { modal.remove(); };
+    modal.querySelector('#ia-key-save').onclick = () => {
+      const s = getSettings();
+      const newKey = keyInput.value.trim();
+      if (newKey && newKey !== '••••••••') s.llmApiKey = newKey;
+      if (urlInput.value.trim()) s.llmBaseUrl = urlInput.value.trim();
+      if (modelInput.value.trim()) s.llmModel = modelInput.value.trim();
+      saveSettings(s);
+      modal.remove();
+    };
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   }
 
   // ── Submit logic ───────────────────────────────────────────
@@ -362,11 +363,11 @@ export function mountRagChat(container) {
     const q = inputEl.value.trim();
     if (!q) return;
 
-    // Re-check key in case user dismissed the prompt
+    // Re-check keys in case user dismissed the prompt
     const keysNow = getKeyStatus();
-    if (isQuestion(q) && !keysNow.llm) {
-      const saved = await showKeyPrompt('llm');
-      if (!saved) return;
+    if (!keysNow.llm && isQuestion(q)) {
+      showSetupPrompt();
+      return;
     }
 
     inputEl.value = '';
