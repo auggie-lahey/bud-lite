@@ -323,7 +323,7 @@ export function mountRagChat(container) {
           </label>
           <label style="display:block;margin-bottom:0.8em">
             <span style="color:#aaa;font-size:0.75rem">Model</span>
-            <input id="ia-key-model" type="text" placeholder="GLM-4.5-air"
+            <input id="ia-key-model" type="text" placeholder="GLM-5.1"
               style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
           </label>
           <div style="display:flex;gap:0.5em;margin-top:0.5em;justify-content:flex-end">

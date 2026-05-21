@@ -45,7 +45,7 @@ function getLLMConfig() {
   return {
     apiKey: s.llmApiKey || '',
     baseUrl: (s.llmBaseUrl || 'https://api.z.ai/api/paas/v4').replace(/\/$/, ''),
-    model: s.llmModel || 'GLM-4.5-air',
+    model: s.llmModel || 'GLM-5.1',
   };
 }
 
