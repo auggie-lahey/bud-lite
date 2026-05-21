@@ -1,27 +1,4 @@
 {
   "hints": {},
-  "micros": {
-    "4d023ce9dfd75a7f3075b8e8e084008be17a1f750c63b5de721e6ef883adc765": "rev.hodl",
-    "5677fa5b6b1cb6d5bee785d088a904cd08082552bf75df3e4302cea015a5d3e1": "Phundamentals",
-    "d3646691ba5b1d796c1e1b3430df00fe1189ec9c232877adde18c8f656af18f0": "jordan",
-    "efe5d120df0cc290fa748727fb45ac487caad346d4f2293ab069e8f01fc51981": "aljaz",
-    "b83a28b7e4e5d20bd960c5faeb6625f95529166b8bdb045d42634a2f35919450": "AviBurra",
-    "a136247d8caf7e30bf403d32006faeca0c9d1cec7a16075e4142c2fed6cade60": "Shadrach"
-  },
-  "labels": {
-    "4d023ce9dfd75a7f3075b8e8e084008be17a1f750c63b5de721e6ef883adc765": "rev.hodl",
-    "5677fa5b6b1cb6d5bee785d088a904cd08082552bf75df3e4302cea015a5d3e1": "Phundamentals",
-    "d3646691ba5b1d796c1e1b3430df00fe1189ec9c232877adde18c8f656af18f0": "jordan",
-    "efe5d120df0cc290fa748727fb45ac487caad346d4f2293ab069e8f01fc51981": "aljaz",
-    "b83a28b7e4e5d20bd960c5faeb6625f95529166b8bdb045d42634a2f35919450": "AviBurra",
-    "a136247d8caf7e30bf403d32006faeca0c9d1cec7a16075e4142c2fed6cade60": "Shadrach"
-  },
-  "pictures": {
-    "4d023ce9dfd75a7f3075b8e8e084008be17a1f750c63b5de721e6ef883adc765": "https://i.nostr.build/attyPOwmlyU7Y0t6.jpg",
-    "5677fa5b6b1cb6d5bee785d088a904cd08082552bf75df3e4302cea015a5d3e1": "https://profilepics.nostur.com/profilepic_v1/1b3e2327f5c0f2bb4addd6c222d70cb1fd9b662cab42e73df7ab677570496ed9/profilepic.jpg?1778870362",
-    "d3646691ba5b1d796c1e1b3430df00fe1189ec9c232877adde18c8f656af18f0": "https://paynym.rs/PM8TJSWMYyxpcyHofm828gtqF4mHVFY6WAVxH8pvvixhVV6tRrb5ZxsMs6BD188JGZ29RtxHk7m37HPRQuddRoRwGHtGgCQC45qfg28ZdATgDcd1M8Gy/avatar",
-    "efe5d120df0cc290fa748727fb45ac487caad346d4f2293ab069e8f01fc51981": "https://m.primal.net/HRBw.jpg",
-    "b83a28b7e4e5d20bd960c5faeb6625f95529166b8bdb045d42634a2f35919450": "https://blossom.primal.net/c8b2a647585c707aa6fbe308f89ec0290b6e14963b0dd66bf39ba83bdb393f8c.gif",
-    "a136247d8caf7e30bf403d32006faeca0c9d1cec7a16075e4142c2fed6cade60": "https://nostr.build/i/fe58f6343aad6f92d469257cea58ce05a8375db379cb12e3823265d1424cc650.jpg"
-  }
+  "micros": {}
 }
