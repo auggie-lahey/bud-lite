@@ -304,42 +304,55 @@ export function mountRagChat(container) {
       const existing = document.getElementById('ia-key-modal');
       if (existing) existing.remove();
 
-      const labels = {
-        llm: { title: 'LLM API Key Required', placeholder: 'sk-...', field: 'llmApiKey', hint: 'Needed to generate answers. Stored in your browser only — never sent to any server.' },
-        hf: { title: 'HuggingFace API Key', placeholder: 'hf_...', field: 'hfApiKey', hint: 'Optional. Free tier works without it, but a key is faster.' },
-      };
-      const info = labels[missingKey] || labels.llm;
-
       const modal = document.createElement('div');
       modal.id = 'ia-key-modal';
       modal.style.cssText = 'position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6)';
       modal.innerHTML = `
-        <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:1.5em;max-width:400px;width:90%">
-          <h3 style="margin:0 0 0.5em;color:#6ee7b7;font-size:1rem">${info.title}</h3>
-          <p style="color:#888;font-size:0.8rem;margin:0 0 1em">${info.hint}</p>
-          <input id="ia-key-input" type="password" placeholder="${info.placeholder}"
-            style="width:100%;padding:0.5em 0.7em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
-          <div style="display:flex;gap:0.5em;margin-top:1em;justify-content:flex-end">
+        <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:1.5em;max-width:440px;width:90%">
+          <h3 style="margin:0 0 0.5em;color:#6ee7b7;font-size:1rem">Configure LLM</h3>
+          <p style="color:#888;font-size:0.75rem;margin:0 0 1em">Chat uses two APIs: <strong>HuggingFace</strong> (embeds your question for search, free without a key) and an <strong>LLM</strong> (generates the answer). Both keys stored in your browser only.</p>
+          <label style="display:block;margin-bottom:0.8em">
+            <span style="color:#aaa;font-size:0.75rem">API Key</span>
+            <input id="ia-key-input" type="password" placeholder="sk-..."
+              style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
+          </label>
+          <label style="display:block;margin-bottom:0.8em">
+            <span style="color:#aaa;font-size:0.75rem">API Endpoint</span>
+            <input id="ia-key-url" type="text" placeholder="https://api.anthropic.com"
+              style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
+          </label>
+          <label style="display:block;margin-bottom:0.8em">
+            <span style="color:#aaa;font-size:0.75rem">Model</span>
+            <input id="ia-key-model" type="text" placeholder="claude-sonnet-4-5-20250514"
+              style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
+          </label>
+          <div style="display:flex;gap:0.5em;margin-top:0.5em;justify-content:flex-end">
             <button id="ia-key-cancel" style="padding:0.4em 1em;background:transparent;border:1px solid #444;border-radius:6px;color:#888;cursor:pointer">Cancel</button>
             <button id="ia-key-save" style="padding:0.4em 1em;background:#6ee7b7;border:none;border-radius:6px;color:#0f1117;cursor:pointer;font-weight:600">Save</button>
           </div>
         </div>`;
       document.body.appendChild(modal);
 
-      const input = modal.querySelector('#ia-key-input');
-      input.focus();
+      // Pre-fill existing values
+      const current = getSettings();
+      const keyInput = modal.querySelector('#ia-key-input');
+      const urlInput = modal.querySelector('#ia-key-url');
+      const modelInput = modal.querySelector('#ia-key-model');
+      if (current.llmApiKey) keyInput.value = current.llmApiKey;
+      if (current.llmBaseUrl) urlInput.value = current.llmBaseUrl;
+      if (current.llmModel) modelInput.value = current.llmModel;
+      keyInput.focus();
+
       modal.querySelector('#ia-key-cancel').onclick = () => { modal.remove(); resolve(false); };
       modal.querySelector('#ia-key-save').onclick = () => {
-        const val = input.value.trim();
-        if (val) {
-          const s = getSettings();
-          s[info.field] = val;
-          saveSettings(s);
-        }
+        const s = getSettings();
+        if (keyInput.value.trim()) s.llmApiKey = keyInput.value.trim();
+        if (urlInput.value.trim()) s.llmBaseUrl = urlInput.value.trim();
+        if (modelInput.value.trim()) s.llmModel = modelInput.value.trim();
+        saveSettings(s);
         modal.remove();
         resolve(true);
       };
-      input.onkeydown = (e) => { if (e.key === 'Enter') modal.querySelector('#ia-key-save').click(); };
       modal.onclick = (e) => { if (e.target === modal) { modal.remove(); resolve(false); } };
     });
   }
