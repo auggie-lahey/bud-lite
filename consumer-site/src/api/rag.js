@@ -51,17 +51,17 @@ function getLLMConfig() {
 
 function getHFConfig() {
   const s = getSettings();
+  const deployed = getDeployedQdrant();
   return {
-    apiKey: s.hfApiKey || '',
+    apiKey: s.hfApiKey || deployed.hfKey || '',
     model: 'mixedbread-ai/mxbai-embed-large-v1',
   };
 }
 
-// ── Embedding via LLM endpoint (OpenAI-compatible) ──────────────────
+// ── Embedding via HuggingFace Inference API ─────────────────────
 
 /**
- * Embed a single text string using the configured LLM endpoint.
- * Falls back to HF only if a separate HF key is configured.
+ * Embed a single text string.
  */
 export async function embedText(text) {
   const vectors = await embedTexts([text]);
@@ -69,65 +69,27 @@ export async function embedText(text) {
 }
 
 /**
- * Embed multiple texts. Uses LLM endpoint's /v1/embeddings (OpenAI format).
- * Falls back to HF Inference API if user has an HF key configured.
+ * Embed multiple texts in batch via HuggingFace.
+ * Uses Bearer auth to avoid CORS preflight issues.
  */
 export async function embedTexts(texts) {
-  const llm = getLLMConfig();
-  const hf = getHFConfig();
+  const { apiKey, model } = getHFConfig();
+  if (!apiKey) throw new Error('HuggingFace API key required for search. Add one in the setup prompt or Settings.');
 
-  // Prefer HF if user has a key configured (better embedding models)
-  if (hf.apiKey) {
-    return embedViaHF(texts, hf);
-  }
+  const url = `https://router.huggingface.co/hf-inference/models/${model}`;
 
-  // Use LLM endpoint (OpenAI-compatible /v1/embeddings)
-  return embedViaLLM(texts, llm);
-}
-
-async function embedViaLLM(texts, { apiKey, baseUrl }) {
-  if (!apiKey) throw new Error('API key not configured. Add one in Settings or the setup prompt.');
-
-  const endpoint = baseUrl.endsWith('/v4') || baseUrl.endsWith('/v4/')
-    ? `${baseUrl}/embeddings`
-    : `${baseUrl}/v1/embeddings`;
-
-  const resp = await fetch(endpoint, {
+  const resp = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: 'embedding-3',
-      input: texts,
-    }),
-  });
-
-  if (!resp.ok) {
-    const err = await resp.text().catch(() => '');
-    throw new Error(`Embedding failed (${resp.status}): ${err}`);
-  }
-
-  const data = await resp.json();
-  // OpenAI format: { data: [{ embedding: [...] }] }
-  return data.data.map(d => d.embedding);
-}
-
-async function embedViaHF(texts, { apiKey, model }) {
-  const url = `https://router.huggingface.co/hf-inference/models/${model}`;
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers,
     body: JSON.stringify({ inputs: texts }),
   });
 
   if (!resp.ok) {
     const err = await resp.text().catch(() => '');
-    throw new Error(`HF embedding failed (${resp.status}): ${err}`);
+    throw new Error(`Embedding failed (${resp.status}): ${err}`);
   }
 
   return resp.json();
@@ -523,11 +485,12 @@ export async function ragGetPubkeys() {
  */
 export function getKeyStatus() {
   const s = getSettings();
+  const deployed = getDeployedQdrant();
   return {
-    hf: Boolean(s.hfApiKey),
+    hf: Boolean(s.hfApiKey || deployed.hfKey),
     llm: Boolean(s.llmApiKey),
     groq: Boolean(s.groqApiKey),
     gemini: Boolean(s.geminiApiKey),
-    qdrant: Boolean(s.qdrantUrl),
+    qdrant: Boolean(s.qdrantUrl || deployed.url),
   };
 }
