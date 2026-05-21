@@ -1,0 +1,70 @@
+name: Deploy Consumer Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'consumer-site/**'
+      - 'iac/terraform.tfstate'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: consumer-site
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Qdrant credentials from Terraform state
+        run: |
+          if [ -f ../iac/terraform.tfstate ]; then
+            URL=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('cluster_url',{}).get('value',''))" 2>/dev/null || echo '')
+            READ_KEY=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('read_only_key',{}).get('value',''))" 2>/dev/null || echo '')
+          fi
+          URL="${URL:-${{ vars.QDRANT_URL }}}"
+          READ_KEY="${READ_KEY:-${{ secrets.QDRANT_API_KEY }}}"
+          mkdir -p public
+          echo "{\"url\":\"$URL\",\"readOnlyKey\":\"$READ_KEY\"}" > public/qdrant-config.json
+
+      - name: Copy soul-hints
+        continue-on-error: true
+        run: |
+          if [ ! -f public/soul-hints.json ] || [ "$(wc -c < public/soul-hints.json)" -lt 30 ]; then
+            # Generate from PUBKEYS var if no hints file or empty
+            if [ -n "$PUBKEYS" ]; then
+              python3 -c "
+          import json, os
+          pubkeys = [p.strip() for p in os.environ['PUBKEYS'].split(',') if p.strip()]
+          labels_raw = os.environ.get('PUBKEY_LABELS', '{}')
+          try: labels = json.loads(labels_raw)
+          except: labels = {}
+          micros = {pk: labels.get(pk, pk[:8]) for pk in pubkeys}
+          out = {'hints': {}, 'micros': micros, 'labels': labels, 'pictures': {}}
+          with open('public/soul-hints.json', 'w') as f:
+            json.dump(out, f)
+          print(f'Generated soul-hints.json with {len(pubkeys)} pubkeys')
+          "
+            fi
+          fi
+        env:
+          PUBKEYS: ${{ vars.PUBKEYS }}
+          PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
+
+      - name: Build
+        run: |
+          npm ci
+          npx vite build
+
+      - name: Deploy to GitHub Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          npx gh-pages -d dist -r "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"

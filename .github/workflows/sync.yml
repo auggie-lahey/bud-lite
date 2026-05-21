@@ -179,22 +179,9 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore: sync nostr notes + update soul hints [skip ci]"
+            git commit -m "chore: sync nostr notes + update soul hints [skip deploy]"
             git push
           fi
-
-      - name: Build and deploy consumer-site
-        if: always()
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd ../consumer-site
-          npm ci
-          npx vite build
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          npx gh-pages -d dist -r "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
 
   notify:
     needs: [terraform, sync]
