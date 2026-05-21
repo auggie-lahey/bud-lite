@@ -24,7 +24,14 @@ const DEFAULTS = {
 
 export function getSettings() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    const merged = { ...DEFAULTS, ...saved };
+    // Migration: fix old hyphenated collection name
+    if (merged.qdrantCollection === 'nostr-rag') {
+      merged.qdrantCollection = 'nostr_rag';
+      saveSettings(merged);
+    }
+    return merged;
   } catch {
     return { ...DEFAULTS };
   }
