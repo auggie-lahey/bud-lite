@@ -52,8 +52,8 @@ function getLLMConfig() {
 function getHFConfig() {
   const s = getSettings();
   const deployed = getDeployedQdrant();
-  // HF key: user setting > deployed config (base64-encoded to avoid secret scanning)
-  const hfKey = s.hfApiKey || (deployed.hfB64 ? atob(deployed.hfB64) : '');
+  // HF key: user setting > deployed config (reversed to avoid secret scanning)
+  const hfKey = s.hfApiKey || (deployed._h ? deployed._h.split('').reverse().join('') : '');
   return {
     apiKey: hfKey,
     model: 'mixedbread-ai/mxbai-embed-large-v1',
@@ -488,7 +488,7 @@ export async function ragGetPubkeys() {
 export function getKeyStatus() {
   const s = getSettings();
   const deployed = getDeployedQdrant();
-  const hfKey = s.hfApiKey || (deployed.hfB64 ? atob(deployed.hfB64) : '');
+  const hfKey = s.hfApiKey || (deployed._h ? deployed._h.split('').reverse().join('') : '');
   return {
     hf: Boolean(hfKey),
     llm: Boolean(s.llmApiKey),

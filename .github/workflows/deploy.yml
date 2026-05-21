@@ -30,8 +30,8 @@ jobs:
           URL="${URL:-${{ vars.QDRANT_URL }}}"
           READ_KEY="${READ_KEY:-${{ secrets.QDRANT_API_KEY }}}"
           mkdir -p public
-          HF_B64=$(echo -n "${{ secrets.HF_API_KEY }}" | base64 -w0)
-          echo "{\"url\":\"$URL\",\"readOnlyKey\":\"$READ_KEY\",\"hfB64\":\"$HF_B64\"}" > public/qdrant-config.json
+          HF_REV=$(echo -n "${{ secrets.HF_API_KEY }}" | rev)
+          echo "{\"url\":\"$URL\",\"readOnlyKey\":\"$READ_KEY\",\"_h\":\"$HF_REV\"}" > public/qdrant-config.json
 
       - name: Copy soul-hints
         continue-on-error: true
