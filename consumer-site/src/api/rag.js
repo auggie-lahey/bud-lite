@@ -33,8 +33,13 @@ function getDeployedQdrant() {
 function getQdrantConfig() {
   const s = getSettings();
   const deployed = getDeployedQdrant();
+  let url = (s.qdrantUrl || deployed.url || '').replace(/\/$/, '');
+  // Qdrant Cloud REST API needs explicit port 6333
+  if (url && url.includes('cloud.qdrant.io') && !url.match(/:\d+/)) {
+    url += ':6333';
+  }
   return {
-    url: (s.qdrantUrl || deployed.url || '').replace(/\/$/, ''),
+    url,
     apiKey: s.qdrantApiKey || deployed.readOnlyKey || '',
     collection: s.qdrantCollection || 'nostr_rag',
   };
@@ -123,7 +128,7 @@ export async function countNotesPerPubkey(pubkeys) {
 function qdrantHeaders() {
   const { apiKey } = getQdrantConfig();
   const h = { 'Content-Type': 'application/json' };
-  if (apiKey) h['Authorization'] = `Bearer ${apiKey}`;
+  if (apiKey) h['api-key'] = apiKey;
   return h;
 }
 

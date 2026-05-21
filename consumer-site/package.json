@@ -15,6 +15,7 @@
     "vite": "^6.0"
   },
   "dependencies": {
-    "@huggingface/inference": "^4.13.18"
+    "@huggingface/inference": "^4.13.18",
+    "@qdrant/js-client-rest": "^1.18.0"
   }
 }
