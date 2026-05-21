@@ -322,7 +322,7 @@ export function mountRagChat(container) {
         </label>
         <label style="display:block;margin-bottom:0.6em">
           <span style="color:#aaa;font-size:0.75rem">API Endpoint</span>
-          <input id="ia-key-url" type="text" placeholder="https://api.z.ai/api/paas/v4"
+          <input id="ia-key-url" type="text" placeholder="https://api.z.ai/api/coding/paas/v4"
             style="width:100%;padding:0.5em 0.7em;margin-top:0.2em;background:#0f1117;border:1px solid #444;border-radius:6px;color:#ddd;font-size:0.9rem;box-sizing:border-box">
         </label>
         <label style="display:block;margin-bottom:0.6em">

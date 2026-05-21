@@ -51,7 +51,7 @@ function getLLMConfig() {
   const s = getSettings();
   return {
     apiKey: s.llmApiKey || '',
-    baseUrl: (s.llmBaseUrl || 'https://api.z.ai/api/paas/v4').replace(/\/$/, ''),
+    baseUrl: (s.llmBaseUrl || 'https://api.z.ai/api/coding/paas/v4').replace(/\/$/, ''),
     model: s.llmModel || 'GLM-5.1',
   };
 }

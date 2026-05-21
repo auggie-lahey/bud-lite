@@ -34,8 +34,8 @@ export function mountSettingsModal(store) {
     // API keys
     document.getElementById('set-hf-key').value = s.hfApiKey || '';
     document.getElementById('set-llm-key').value = s.llmApiKey || '';
-    document.getElementById('set-llm-base-url').value = s.llmBaseUrl || 'https://api.anthropic.com';
-    document.getElementById('set-llm-model').value = s.llmModel || 'claude-sonnet-4-5-20250514';
+    document.getElementById('set-llm-base-url').value = s.llmBaseUrl || 'https://api.z.ai/api/coding/paas/v4';
+    document.getElementById('set-llm-model').value = s.llmModel || 'GLM-5.1';
     document.getElementById('set-groq-key').value = s.groqApiKey || '';
     document.getElementById('set-gemini-key').value = s.geminiApiKey || '';
     settingsOverlay.classList.remove('hidden');
@@ -65,8 +65,8 @@ export function mountSettingsModal(store) {
       // API keys
       hfApiKey: document.getElementById('set-hf-key').value.trim(),
       llmApiKey: document.getElementById('set-llm-key').value.trim(),
-      llmBaseUrl: document.getElementById('set-llm-base-url').value.trim() || 'https://api.anthropic.com',
-      llmModel: document.getElementById('set-llm-model').value.trim() || 'claude-sonnet-4-5-20250514',
+      llmBaseUrl: document.getElementById('set-llm-base-url').value.trim() || 'https://api.z.ai/api/coding/paas/v4',
+      llmModel: document.getElementById('set-llm-model').value.trim() || 'GLM-5.1',
       groqApiKey: document.getElementById('set-groq-key').value.trim(),
       geminiApiKey: document.getElementById('set-gemini-key').value.trim(),
     });

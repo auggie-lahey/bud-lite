@@ -16,7 +16,7 @@ const DEFAULTS = {
   // API keys — stored in browser only, sent per-request
   hfApiKey: '',
   llmApiKey: '',
-  llmBaseUrl: 'https://api.z.ai/api/paas/v4',
+  llmBaseUrl: 'https://api.z.ai/api/coding/paas/v4',
   llmModel: 'GLM-5.1',
   groqApiKey: '',
   geminiApiKey: '',
