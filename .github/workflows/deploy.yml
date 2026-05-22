@@ -35,12 +35,6 @@ jobs:
 
       - name: Build
         run: |
-          echo "=== public/ contents ==="
-          ls -la public/ 2>&1 || true
-          echo "=== public/soul-hints.json size ==="
-          wc -c public/soul-hints.json 2>&1 || true
-          echo "=== public/souls/ ==="
-          ls public/souls/ 2>&1 || true
           npm ci
           npx vite build
 
