@@ -33,30 +33,6 @@ jobs:
           HF_REV=$(echo -n "${{ secrets.HF_API_KEY }}" | rev)
           echo "{\"url\":\"$URL\",\"readOnlyKey\":\"$READ_KEY\",\"_h\":\"$HF_REV\"}" > public/qdrant-config.json
 
-      - name: Copy soul-hints
-        continue-on-error: true
-        run: |
-          if [ ! -f public/soul-hints.json ] || [ "$(wc -c < public/soul-hints.json)" -lt 30 ]; then
-            # Generate from PUBKEYS var if no hints file or empty
-            if [ -n "$PUBKEYS" ]; then
-              python3 -c "
-          import json, os
-          pubkeys = [p.strip() for p in os.environ['PUBKEYS'].split(',') if p.strip()]
-          labels_raw = os.environ.get('PUBKEY_LABELS', '{}')
-          try: labels = json.loads(labels_raw)
-          except: labels = {}
-          micros = {pk: labels.get(pk, pk[:8]) for pk in pubkeys}
-          out = {'hints': {}, 'micros': micros, 'labels': labels, 'pictures': {}}
-          with open('public/soul-hints.json', 'w') as f:
-            json.dump(out, f)
-          print(f'Generated soul-hints.json with {len(pubkeys)} pubkeys')
-          "
-            fi
-          fi
-        env:
-          PUBKEYS: ${{ vars.PUBKEYS }}
-          PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
-
       - name: Build
         run: |
           npm ci
