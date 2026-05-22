@@ -692,13 +692,17 @@ html[data-view="list"] .ia-dropdown { top: auto; left: auto; right: 4px; bottom:
 .ia-user-chip .no-pfp { width: 20px; height: 20px; border-radius: 50%; background: #333;
                          display: flex; align-items: center; justify-content: center;
                          font-size: 0.6rem; color: #666; }
+.ia-user-chip { position: relative; }
 .ia-user-chip a { color: inherit; text-decoration: none; }
 .ia-chip-count { font-size: 0.6rem; background: #333; color: #aaa; border-radius: 8px; padding: 0.1em 0.4em; margin-left: 0.2em; }
-.ia-chip-tooltip { display: none; position: absolute; top: 100%; left: 0; min-width: 250px;
-                    background: #1a1a2e; border: 1px solid #333; border-radius: 6px;
-                    padding: 0.6em 0.8em; font-size: 0.75rem; color: #aaa; z-index: 10;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.5); line-height: 1.4; margin-top: 4px; }
-.ia-user-chip:hover .ia-chip-tooltip { display: block; }
+.ia-chip-tooltip { display: none; position: absolute; top: calc(100% + 6px); left: 0; min-width: 280px;
+                    background: #1a1a2e; border: 1px solid #333; border-radius: 8px;
+                    padding: 0.7em 0.9em; font-size: 0.75rem; color: #aaa; z-index: 100;
+                    box-shadow: 0 6px 16px rgba(0,0,0,0.6); line-height: 1.5;
+                    pointer-events: none; max-height: 320px; overflow-y: auto; }
+/* Pseudo-element bridges the gap so mouse stays in hover zone */
+.ia-chip-tooltip::before { content: ''; position: absolute; top: -6px; left: 0; right: 0; height: 6px; }
+.ia-user-chip:hover .ia-chip-tooltip { display: block; pointer-events: auto; }
 .ia-chat-history-bar { display: flex; gap: 0.3em; padding: 0.3em 0.8em; border-bottom: 1px solid var(--color-ia-border); flex-wrap: wrap; align-items: center; }
 .ia-chat-history-bar .hb-label { font-size: 0.7rem; color: #666; margin-right: 0.3em; }
 .ia-session-tab { font-size: 0.7rem; padding: 0.2em 0.6em; border-radius: 3px; background: #1a1a2e;
@@ -765,18 +769,8 @@ html[data-view="list"] .ia-dropdown { top: auto; left: auto; right: 4px; bottom:
 .ia-prompt-body pre { margin: 0.3em 0 0; white-space: pre-wrap; font-size: 0.75rem; color: #888; }
 .ia-prompt-label { color: #fbbf24; font-size: 0.75rem; font-weight: 700; }
 
-/* ── User chip tooltips ──────────────────────────────────────── */
-.ia-user-chip { position: relative; }
-.ia-chip-tooltip {
-  display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-  background: #1a1a2e; border: 1px solid #333; border-radius: 8px; padding: 0.6em 0.8em;
-  width: 280px; font-size: 0.75rem; color: #aaa; line-height: 1.4; z-index: 100;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none;
-}
-.ia-user-chip:hover .ia-chip-tooltip { display: block; pointer-events: auto; }
-
 /* ── Profile page ────────────────────────────────────────────── */
-.ia-profile-page { max-width: 720px; margin: 0 auto; padding: 2em 1em; color: var(--color-ia-ink); }
+.ia-profile-page { max-width: 720px; margin: 0 auto; padding: 2em 1em; color: #ddd; background: #0f1117; min-height: 100vh; }
 .ia-profile-loading, .ia-profile-error { text-align: center; padding: 3em; color: #888; }
 .ia-profile-header { display: flex; align-items: center; gap: 1.2em; margin-bottom: 2em; }
 .ia-profile-avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #333; }

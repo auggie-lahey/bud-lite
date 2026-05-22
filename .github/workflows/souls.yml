@@ -65,24 +65,36 @@ jobs:
           if [ -f data/souls/hints.json ]; then
             cp data/souls/hints.json ../consumer-site/public/soul-hints.json
             echo "Copied soul-hints.json"
-            # Also update pictures from existing file if present
-            if [ -f ../consumer-site/public/soul-hints.json ]; then
-              python3 -c "
-          import json
+            # Merge labels, pictures from PUBKEY_LABELS and existing file
+            python3 -c "
+          import json, os, urllib.request
           with open('../consumer-site/public/soul-hints.json') as f:
               data = json.load(f)
-          # Ensure labels and pictures from PUBKEY_LABELS are included
-          import os
           pubkeys = [p.strip() for p in os.environ.get('PUBKEYS', '').split(',') if p.strip()]
           labels_raw = os.environ.get('PUBKEY_LABELS', '{}')
           try: labels = json.loads(labels_raw)
           except: labels = {}
           data.setdefault('labels', {}).update(labels)
+          # Fetch profile pictures from Nostr relays
+          pictures = data.get('pictures', {})
+          for pk in pubkeys:
+              if pk in pictures: continue
+              try:
+                  # Try primal.net API for profile picture
+                  url = f'https://primal.net/api/v0/profile/{pk}'
+                  req = urllib.request.Request(url, headers={'User-Agent': 'bud-lite-ci/1.0'})
+                  resp = urllib.request.urlopen(req, timeout=5)
+                  profile = json.loads(resp.read())
+                  pic = profile.get('picture', '')
+                  if pic: pictures[pk] = pic
+                  print(f'Fetched picture for {labels.get(pk, pk[:8])}: {bool(pic)}')
+              except Exception as e:
+                  print(f'No picture for {labels.get(pk, pk[:8])}: {e}')
+          data['pictures'] = pictures
           with open('../consumer-site/public/soul-hints.json', 'w') as f:
               json.dump(data, f, indent=2)
-          print(f'Updated soul-hints.json with {len(data.get(\"hints\", {}))} hints')
+          print(f'Updated soul-hints.json: {len(data.get(\"hints\", {}))} hints, {len(pictures)} pictures')
           "
-            fi
           else
             echo "::warning::No hints.json generated"
           fi
