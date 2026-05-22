@@ -36,8 +36,68 @@ def run_fetch(full: bool = False) -> int:
     return count
 
 
+async def run_enrich_npubs() -> int:
+    """Phase 2a: Resolve npub → @Username."""
+    from ingestion.nostr_sync import enrich_npubs
+
+    log.info("Phase 2a: resolving npubs...")
+    count = await enrich_npubs()
+    log.info("Phase 2a complete: %d substitutions", count)
+    return count
+
+
+async def run_enrich_nprofiles() -> int:
+    """Phase 2b: Resolve nprofile → @Username."""
+    from ingestion.nostr_sync import enrich_nprofiles
+
+    log.info("Phase 2b: resolving nprofiles...")
+    count = await enrich_nprofiles()
+    log.info("Phase 2b complete: %d substitutions", count)
+    return count
+
+
+def run_enrich_nevents() -> int:
+    """Phase 2c: Resolve nevent → quoted content."""
+    from ingestion.nostr_sync import enrich_nevents
+
+    log.info("Phase 2c: resolving nevents...")
+    count = enrich_nevents()
+    log.info("Phase 2c complete: %d substitutions", count)
+    return count
+
+
+def run_enrich_naddrs() -> int:
+    """Phase 2d: Resolve naddr → article reference."""
+    from ingestion.nostr_sync import enrich_naddrs
+
+    log.info("Phase 2d: resolving naddrs...")
+    count = enrich_naddrs()
+    log.info("Phase 2d complete: %d substitutions", count)
+    return count
+
+
+def run_enrich_note1s() -> int:
+    """Phase 2e: Resolve note1 → note content."""
+    from ingestion.nostr_sync import enrich_note1s
+
+    log.info("Phase 2e: resolving note1s...")
+    count = enrich_note1s()
+    log.info("Phase 2e complete: %d substitutions", count)
+    return count
+
+
+def run_enrich_replies() -> int:
+    """Phase 2f: Prepend reply context to notes."""
+    from ingestion.nostr_sync import enrich_replies
+
+    log.info("Phase 2f: enriching reply context...")
+    count = enrich_replies()
+    log.info("Phase 2f complete: %d notes enriched", count)
+    return count
+
+
 async def run_enrich() -> int:
-    """Phase 2: Enrich notes (resolve names + referenced events)."""
+    """Phase 2 (all): Run all enrichment types."""
     from ingestion.nostr_sync import enrich_notes_file
 
     log.info("Phase 2: enriching notes...")
@@ -108,6 +168,18 @@ if __name__ == "__main__":
             run_fetch(full=full)
         elif cmd == "enrich":
             asyncio.run(run_enrich())
+        elif cmd == "enrich-npubs":
+            asyncio.run(run_enrich_npubs())
+        elif cmd == "enrich-nprofiles":
+            asyncio.run(run_enrich_nprofiles())
+        elif cmd == "enrich-nevents":
+            run_enrich_nevents()
+        elif cmd == "enrich-naddrs":
+            run_enrich_naddrs()
+        elif cmd == "enrich-note1s":
+            run_enrich_note1s()
+        elif cmd == "enrich-replies":
+            run_enrich_replies()
         elif cmd == "index":
             asyncio.run(run_index(hf_api_key=hf_key))
         elif cmd == "souls":
@@ -123,16 +195,22 @@ if __name__ == "__main__":
             print("Usage: python -m worker.runner <command> [options]")
             print()
             print("Pipeline (run in order):")
-            print("  fetch [--full]   Fetch notes from Nostr relays")
-            print("  enrich           Resolve usernames + referenced events")
-            print("  index            Embed and upsert to Qdrant")
+            print("  fetch [--full]        Fetch notes from Nostr relays")
+            print("  enrich-npubs          Resolve npub → @Username")
+            print("  enrich-nprofiles      Resolve nprofile → @Username")
+            print("  enrich-nevents        Resolve nevent → quoted content")
+            print("  enrich-naddrs         Resolve naddr → article reference")
+            print("  enrich-note1s         Resolve note1 → note content")
+            print("  enrich-replies        Prepend reply context to notes")
+            print("  index                 Embed and upsert to Qdrant")
             print()
-            print("All-in-one:")
-            print("  sync [--full]    Fetch + enrich + index")
+            print("Shortcuts:")
+            print("  enrich                Run all enrichment steps")
+            print("  sync [--full]         Fetch + enrich + index (all-in-one)")
             print()
             print("Other:")
-            print("  souls            Generate soul files and hints")
-            print("  file <path>      Process a single file")
+            print("  souls                 Generate soul files and hints")
+            print("  file <path>           Process a single file")
             sys.exit(1)
     else:
         asyncio.run(run_nostr_sync(hf_api_key=hf_key))

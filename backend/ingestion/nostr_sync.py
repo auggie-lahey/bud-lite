@@ -815,8 +815,349 @@ def fetch_notes(full: bool = False) -> int:
     return len(notes)
 
 
+async def enrich_npubs() -> int:
+    """Phase 2a: Resolve npub → @Username in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect npub pubkeys
+    referenced_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NPUB_RE.finditer(note.content):
+            if count >= MAX_PK_REFS_PER_NOTE:
+                break
+            pk = _decode_npub(m.group(0).replace("nostr:", ""))
+            if pk:
+                referenced_pks.add(pk)
+                count += 1
+        # Also from tags
+        for pk in note.mentioned_pubkeys:
+            if pk: referenced_pks.add(pk)
+        if note.reply_to_pubkey:
+            referenced_pks.add(pk)
+
+    referenced_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if referenced_pks:
+        fetched = await _fetch_metadata_batch(referenced_pks, settings.relay_list)
+        name_lookup.update(fetched)
+        log.info("npub: resolved %d/%d names", len(fetched), len(referenced_pks))
+
+    pk_remaining = [MAX_PK_REFS_PER_NOTE]
+    subs = [0]
+    def _replace(match):
+        if pk_remaining[0] <= 0:
+            return match.group(0)
+        npub_str = match.group(0).replace("nostr:", "")
+        pk = _decode_npub(npub_str)
+        if pk and pk in name_lookup:
+            pk_remaining[0] -= 1
+            subs[0] += 1
+            replacement = f"@{name_lookup[pk]}"
+            log.info("  npub %s → %s", npub_str[:20], replacement)
+            return replacement
+        return npub_str
+
+    for note in notes:
+        note.content = NPUB_RE.sub(_replace, note.content)
+        note.content = note.content.replace("@@", "@")
+
+    log.info("npub: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+async def enrich_nprofiles() -> int:
+    """Phase 2b: Resolve nprofile → @Username in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect nprofile pubkeys
+    referenced_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NPROFILE_RE.finditer(note.content):
+            if count >= MAX_PK_REFS_PER_NOTE:
+                break
+            pk = _decode_nprofile(m.group(0))
+            if pk:
+                referenced_pks.add(pk)
+                count += 1
+
+    referenced_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if referenced_pks:
+        fetched = await _fetch_metadata_batch(referenced_pks, settings.relay_list)
+        name_lookup.update(fetched)
+        log.info("nprofile: resolved %d/%d names", len(fetched), len(referenced_pks))
+
+    pk_remaining = [MAX_PK_REFS_PER_NOTE]
+    subs = [0]
+    def _replace(match):
+        if pk_remaining[0] <= 0:
+            return match.group(0)
+        original = match.group(0)
+        pk = _decode_nprofile(original)
+        if pk and pk in name_lookup:
+            pk_remaining[0] -= 1
+            subs[0] += 1
+            replacement = f"@{name_lookup[pk]}"
+            log.info("  nprofile %s → %s", original[:20], replacement)
+            return replacement
+        return original.replace("nostr:", "")
+
+    for note in notes:
+        note.content = NPROFILE_RE.sub(_replace, note.content)
+        note.content = note.content.replace("@@", "@")
+
+    log.info("nprofile: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_nevents() -> int:
+    """Phase 2c: Resolve nevent → quoted content preview in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect nevent IDs + author pubkeys
+    event_ids: set[str] = set()
+    author_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NEVENT_RE.finditer(note.content):
+            if count >= MAX_EVENT_REFS_PER_NOTE:
+                break
+            decoded = _decode_nevent(m.group(0))
+            if decoded:
+                event_ids.add(decoded["event_id"])
+                if decoded.get("author_pk"):
+                    author_pks.add(decoded["author_pk"])
+                count += 1
+
+    # Fetch author names
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+
+    # Fetch referenced events
+    event_lookup = _fetch_referenced_events(event_ids, [], settings.relay_list)
+    log.info("nevent: fetched %d/%d events", len(event_lookup), len(event_ids))
+
+    event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+    subs = [0]
+    def _replace(match):
+        if event_remaining[0] <= 0:
+            return match.group(0)
+        original = match.group(0)
+        decoded = _decode_nevent(original)
+        if not decoded:
+            return original.replace("nostr:", "")
+        ev = event_lookup.get(decoded["event_id"])
+        if not ev:
+            return original.replace("nostr:", "")
+        event_remaining[0] -= 1
+        subs[0] += 1
+        author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
+        preview = ev.get("content", "")[:100].replace("\n", " ").strip()
+        if ev.get("title"):
+            replacement = f"[{ev['title']} by @{author}]"
+        elif preview:
+            replacement = f'[quoting @{author}: "{preview}..."]'
+        else:
+            replacement = f"[event by @{author}]"
+        log.info("  nevent %s → %s", original[:20], replacement[:60])
+        return replacement
+
+    for note in notes:
+        note.content = NEVENT_RE.sub(_replace, note.content)
+
+    log.info("nevent: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_naddrs() -> int:
+    """Phase 2d: Resolve naddr → article reference in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect naddr refs
+    naddr_refs: list[dict] = []
+    author_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NADDR_RE.finditer(note.content):
+            if count >= MAX_EVENT_REFS_PER_NOTE:
+                break
+            decoded = _decode_naddr(m.group(0))
+            if decoded:
+                naddr_refs.append(decoded)
+                if decoded.get("author_pk"):
+                    author_pks.add(decoded["author_pk"])
+                count += 1
+
+    # Fetch author names
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+
+    # Fetch naddr events
+    event_lookup = _fetch_referenced_events(set(), naddr_refs, settings.relay_list)
+    log.info("naddr: fetched %d/%d articles", len(event_lookup), len(naddr_refs))
+
+    event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+    subs = [0]
+    def _replace(match):
+        if event_remaining[0] <= 0:
+            return match.group(0)
+        original = match.group(0)
+        decoded = _decode_naddr(original)
+        if not decoded:
+            return original.replace("nostr:", "")
+        event_remaining[0] -= 1
+        subs[0] += 1
+        key = f"naddr:{decoded['author_pk']}:{decoded['kind']}:{decoded['d_tag']}"
+        ev = event_lookup.get(key)
+        author = name_lookup.get(decoded.get("author_pk", ""), decoded.get("author_pk", "")[:8])
+        if ev and ev.get("title"):
+            replacement = f"[{ev['title']} by @{author}]"
+        elif ev and ev.get("summary"):
+            replacement = f"[article by @{author}: {ev['summary'][:80]}]"
+        else:
+            replacement = f"[article by @{author}]"
+        log.info("  naddr %s → %s", original[:20], replacement[:60])
+        return replacement
+
+    for note in notes:
+        note.content = NADDR_RE.sub(_replace, note.content)
+
+    log.info("naddr: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_note1s() -> int:
+    """Phase 2e: Resolve note1 → note content preview in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect note1 event IDs
+    event_ids: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NOTE_RE.finditer(note.content):
+            if count >= MAX_EVENT_REFS_PER_NOTE:
+                break
+            eid = _decode_note1(m.group(0).replace("nostr:", ""))
+            if eid:
+                event_ids.add(eid)
+                count += 1
+
+    # Fetch referenced events + their author names
+    event_lookup = _fetch_referenced_events(event_ids, [], settings.relay_list)
+    author_pks = {ev["pubkey"] for ev in event_lookup.values() if ev.get("pubkey")}
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+    log.info("note1: fetched %d/%d notes", len(event_lookup), len(event_ids))
+
+    event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+    subs = [0]
+    def _replace(match):
+        if event_remaining[0] <= 0:
+            return match.group(0)
+        original = match.group(0).replace("nostr:", "")
+        eid = _decode_note1(original)
+        if not eid:
+            return original
+        ev = event_lookup.get(eid)
+        if not ev:
+            return original
+        event_remaining[0] -= 1
+        subs[0] += 1
+        author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
+        preview = ev.get("content", "")[:100].replace("\n", " ").strip()
+        if preview:
+            replacement = f'[quoting @{author}: "{preview}..."]'
+        else:
+            replacement = f"[note by @{author}]"
+        log.info("  note1 %s → %s", original[:20], replacement[:60])
+        return replacement
+
+    for note in notes:
+        note.content = NOTE_RE.sub(_replace, note.content)
+
+    log.info("note1: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_replies() -> int:
+    """Phase 2f: Prepend reply context to notes that reply to others.
+
+    Transforms content like:
+      "great point!"
+    Into:
+      '[Replying to @Alice who said "I think bitcoin will..."]: great point!'
+    """
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect parent event IDs from notes that are replies
+    parent_ids: set[str] = set()
+    for note in notes:
+        if note.reply_to_id:
+            parent_ids.add(note.reply_to_id)
+
+    if not parent_ids:
+        log.info("replies: no reply notes found, skipping")
+        _save_notes(notes, BATCH_FILE)
+        return 0
+
+    # Fetch parent events
+    parent_lookup = _fetch_referenced_events(parent_ids, [], settings.relay_list)
+    log.info("replies: fetched %d/%d parent events", len(parent_lookup), len(parent_ids))
+
+    # Resolve parent author names
+    author_pks = {ev["pubkey"] for ev in parent_lookup.values() if ev.get("pubkey")}
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+
+    subs = 0
+    for note in notes:
+        if not note.reply_to_id:
+            continue
+        parent = parent_lookup.get(note.reply_to_id)
+        if not parent:
+            continue
+        author = name_lookup.get(parent.get("pubkey", ""), parent.get("pubkey", "")[:8])
+        preview = parent.get("content", "")[:120].replace("\n", " ").strip()
+        if preview:
+            prefix = f'[Replying to @{author} who said "{preview}"]: '
+        else:
+            prefix = f"[Replying to @{author}]: "
+        log.info("  reply %s → @%s: %s", note.event_id[:12], author, note.content[:60])
+        note.content = prefix + note.content
+        subs += 1
+
+    log.info("replies: %d notes got reply context out of %d replies", subs, len(parent_ids))
+    _save_notes(notes, BATCH_FILE)
+    return subs
+
+
 async def enrich_notes_file() -> int:
-    """Phase 2: Enrich notes from data/sync_batch.json (names + events)."""
+    """Phase 2 (all): Run all enrichment types on batch file."""
     settings = get_settings()
     notes = _load_notes(BATCH_FILE)
     await enrich_notes(notes, settings.relay_list, settings.pubkey_label_map)

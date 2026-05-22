@@ -137,10 +137,35 @@ jobs:
           fi
           python -m worker.runner fetch $FULL_FLAG
 
-      - name: Enrich notes (resolve usernames + referenced events)
+      - name: Resolve npub → @Username
         if: env.HAS_CREDENTIALS == 'true'
-        id: enrich
-        run: python -m worker.runner enrich
+        id: enrich-npubs
+        run: python -m worker.runner enrich-npubs
+
+      - name: Resolve nprofile → @Username
+        if: env.HAS_CREDENTIALS == 'true'
+        id: enrich-nprofiles
+        run: python -m worker.runner enrich-nprofiles
+
+      - name: Resolve nevent → quoted content
+        if: env.HAS_CREDENTIALS == 'true'
+        id: enrich-nevents
+        run: python -m worker.runner enrich-nevents
+
+      - name: Resolve naddr → article references
+        if: env.HAS_CREDENTIALS == 'true'
+        id: enrich-naddrs
+        run: python -m worker.runner enrich-naddrs
+
+      - name: Resolve note1 → note content
+        if: env.HAS_CREDENTIALS == 'true'
+        id: enrich-note1s
+        run: python -m worker.runner enrich-note1s
+
+      - name: Prepend reply context
+        if: env.HAS_CREDENTIALS == 'true'
+        id: enrich-replies
+        run: python -m worker.runner enrich-replies
 
       - name: Embed and index to Qdrant
         if: env.HAS_CREDENTIALS == 'true'
