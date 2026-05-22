@@ -488,12 +488,54 @@ export async function ragGetPubkeys() {
       name: labels[pk] || pk.slice(0, 8),
       label: labels[pk] || '',
       picture: pictures[pk] || '',
+      npub: hexToNpub(pk),
       // Show hint (compact profile) in tooltip, fall back to micro
       micro: hints[pk] || micros[pk] || '',
     }));
   } catch {
     return [];
   }
+}
+
+// Encode hex pubkey to npub (bech32)
+function hexToNpub(hex) {
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const bytes = [];
+  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.substr(i, 2), 16));
+  const fiveBit = [];
+  let acc = 0, bits = 0;
+  for (const b of bytes) {
+    acc = (acc << 8) | b;
+    bits += 8;
+    while (bits >= 5) { bits -= 5; fiveBit.push((acc >>> bits) & 31); }
+  }
+  if (bits > 0) fiveBit.push((acc << (5 - bits)) & 31);
+  const data = [0, 0, 0, 0, ...fiveBit];
+  const polymod = bech32Polymod(hrpExpand('npub').concat(data).concat([0, 0, 0, 0, 0, 0])) ^ 1;
+  const checksum = [];
+  for (let i = 0; i < 6; i++) checksum.push((polymod >> (5 * (5 - i))) & 31);
+  let result = 'npub1';
+  for (const val of [...fiveBit, ...checksum]) result += CHARSET[val];
+  return result;
+}
+
+function hrpExpand(hrp) {
+  const r = [];
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) >> 5);
+  r.push(0);
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) & 31);
+  return r;
+}
+
+function bech32Polymod(values) {
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const b = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) if ((b >> i) & 1) chk ^= GEN[i];
+  }
+  return chk;
 }
 
 /**

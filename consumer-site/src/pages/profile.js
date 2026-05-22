@@ -1,12 +1,12 @@
 /**
  * Profile page — shows a user's distilled Nostr profile.
- * Route: /p/:pubkey (hex or partial)
- * Shows: avatar, name, npub, compact soul (~1000 tokens), full soul (~20K tokens, collapsed)
+ * Route: /:npub  (e.g. /npub1abc123...)
+ * Shows: avatar, name, npub, compact soul (~1000 tokens), micro summary
  */
 
 export function profilePage(params, store) {
   const main = document.querySelector('main');
-  const identifier = decodeURIComponent(params[0]);
+  const npub = params[0];
 
   main.innerHTML = `
     <div class="ia-profile-page">
@@ -16,7 +16,13 @@ export function profilePage(params, store) {
   const container = main.querySelector('.ia-profile-page');
 
   (async () => {
-    // Load soul hints
+    // Decode npub to hex pubkey
+    const pubkey = npubToHex(npub);
+    if (!pubkey) {
+      container.innerHTML = '<div class="ia-profile-error">Invalid npub.</div><a href="#/chat" class="ia-profile-back">← Back to chat</a>';
+      return;
+    }
+
     let data = null;
     try {
       const resp = await fetch(`${import.meta.env.BASE_URL}soul-hints.json`);
@@ -33,18 +39,8 @@ export function profilePage(params, store) {
     const labels = data.labels || {};
     const pictures = data.pictures || {};
 
-    // Find pubkey by hex (full or partial)
-    let pubkey = null;
-    for (const pk of Object.keys(labels)) {
-      if (pk === identifier || pk.startsWith(identifier)) {
-        pubkey = pk;
-        break;
-      }
-    }
-
-    if (!pubkey) {
-      container.innerHTML = `<div class="ia-profile-error">Profile not found.</div>
-        <a href="#/chat" class="ia-profile-back">← Back to chat</a>`;
+    if (!labels[pubkey]) {
+      container.innerHTML = '<div class="ia-profile-error">Profile not found.</div><a href="#/chat" class="ia-profile-back">← Back to chat</a>';
       return;
     }
 
@@ -52,7 +48,6 @@ export function profilePage(params, store) {
     const picture = pictures[pubkey] || '';
     const hint = hints[pubkey] || '';
     const micro = micros[pubkey] || '';
-    const npub = hexToNpub(pubkey);
 
     container.innerHTML = `
       <div class="ia-profile-header">
@@ -90,56 +85,60 @@ export function profilePage(params, store) {
   return () => {};
 }
 
-// Minimal hex-to-npub (bech32 encoding)
+// Decode npub (bech32) to hex pubkey
+function npubToHex(npub) {
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  if (!npub.startsWith('npub1')) return null;
+  const data = [];
+  for (const c of npub.slice(5)) {
+    const idx = CHARSET.indexOf(c);
+    if (idx === -1) return null;
+    data.push(idx);
+  }
+  // Strip 6-char checksum
+  const payload = data.slice(0, data.length - 6);
+  // Convert 5-bit groups to 8-bit bytes
+  const bytes = [];
+  let acc = 0, bits = 0;
+  for (const val of payload) {
+    acc = (acc << 5) | val;
+    bits += 5;
+    while (bits >= 8) {
+      bits -= 8;
+      bytes.push((acc >>> bits) & 255);
+    }
+  }
+  return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Encode hex pubkey to npub (bech32)
 function hexToNpub(hex) {
   const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
   const bytes = [];
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes.push(parseInt(hex.substr(i, 2), 16));
-  }
-  // Convert 8-bit to 5-bit groups
+  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.substr(i, 2), 16));
   const fiveBit = [];
   let acc = 0, bits = 0;
-  const max = bytes.length;
-  for (let i = 0; i < max; i++) {
-    acc = (acc << 8) | bytes[i];
+  for (const b of bytes) {
+    acc = (acc << 8) | b;
     bits += 8;
-    while (bits >= 5) {
-      bits -= 5;
-      fiveBit.push((acc >>> bits) & 31);
-    }
+    while (bits >= 5) { bits -= 5; fiveBit.push((acc >>> bits) & 31); }
   }
   if (bits > 0) fiveBit.push((acc << (5 - bits)) & 31);
-
-  // Add checksum (simplified — just prefix for display)
   const data = [0, 0, 0, 0, ...fiveBit];
-  const checksum = bech32Checksum('npub', data);
-  const combined = [...fiveBit, ...checksum];
-
+  const polymod = bech32Polymod(hrpExpand('npub').concat(data).concat([0, 0, 0, 0, 0, 0])) ^ 1;
+  const checksum = [];
+  for (let i = 0; i < 6; i++) checksum.push((polymod >> (5 * (5 - i))) & 31);
   let result = 'npub1';
-  for (const val of combined) {
-    result += CHARSET[val];
-  }
-  return result;
-}
-
-function bech32Checksum(hrp, data) {
-  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-  const values = hrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
-  const polymod = bech32Polymod(values) ^ 1;
-  const result = [];
-  for (let i = 0; i < 6; i++) {
-    result.push((polymod >> (5 * (5 - i))) & 31);
-  }
+  for (const val of [...fiveBit, ...checksum]) result += CHARSET[val];
   return result;
 }
 
 function hrpExpand(hrp) {
-  const result = [];
-  for (let i = 0; i < hrp.length; i++) result.push(hrp.charCodeAt(i) >> 5);
-  result.push(0);
-  for (let i = 0; i < hrp.length; i++) result.push(hrp.charCodeAt(i) & 31);
-  return result;
+  const r = [];
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) >> 5);
+  r.push(0);
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) & 31);
+  return r;
 }
 
 function bech32Polymod(values) {
@@ -148,9 +147,7 @@ function bech32Polymod(values) {
   for (const v of values) {
     const b = chk >> 25;
     chk = ((chk & 0x1ffffff) << 5) ^ v;
-    for (let i = 0; i < 5; i++) {
-      if ((b >> i) & 1) chk ^= GEN[i];
-    }
+    for (let i = 0; i < 5; i++) if ((b >> i) & 1) chk ^= GEN[i];
   }
   return chk;
 }

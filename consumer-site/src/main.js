@@ -508,7 +508,7 @@ const router = createRouter([
   { pattern: /^\/folder\/(.+)$/,            handler: folderPage },
   { pattern: /^\/details\/([0-9a-f]{64})$/, handler: detailsPage },
   { pattern: /^\/about$/,                   handler: aboutPage },
-  { pattern: /^\/p\/(.+)$/,                 handler: profilePage },
+  { pattern: /^\/(npub1[a-zA-HJ-NP-Z0-9]+)$/, handler: profilePage },
 ], store);
 
 // Hide footer on chat page (full-height chat needs the space)
