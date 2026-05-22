@@ -474,17 +474,22 @@ export async function ragGetPubkeys() {
     const resp = await fetch(`${import.meta.env.BASE_URL}soul-hints.json`);
     if (!resp.ok) return [];
     const data = await resp.json();
+    const hints = data.hints || {};
     const micros = data.micros || {};
     const labels = data.labels || {};
     const pictures = data.pictures || {};
-    const pubkeys = Object.keys(micros);
+    // Use whichever has pubkeys: hints > micros > labels
+    const pubkeys = Object.keys(hints).length ? Object.keys(hints)
+      : Object.keys(micros).length ? Object.keys(micros)
+      : Object.keys(labels);
     if (!pubkeys.length) return [];
     return pubkeys.map(pk => ({
       pubkey: pk,
       name: labels[pk] || pk.slice(0, 8),
       label: labels[pk] || '',
       picture: pictures[pk] || '',
-      micro: micros[pk] || '',
+      // Show hint (compact profile) in tooltip, fall back to micro
+      micro: hints[pk] || micros[pk] || '',
     }));
   } catch {
     return [];

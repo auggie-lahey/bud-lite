@@ -160,7 +160,11 @@ export function mountRagChat(container) {
         ? `<img src="${esc(p.picture)}" class="pfp-img"><span class="no-pfp">${initial}</span>`
         : `<span class="no-pfp">${initial}</span>`;
       const profileLink = `https://primal.net/p/${p.pubkey}`;
-      const tooltipHtml = p.micro ? `<div class="ia-chip-tooltip">${esc(p.micro)} <a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">profile ↗</a></div>` : `<div class="ia-chip-tooltip"><a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">View profile ↗</a></div>`;
+      // Truncate hint for tooltip (first ~300 chars)
+      const hintShort = p.micro ? esc(p.micro.slice(0, 300)) + (p.micro.length > 300 ? '...' : '') : '';
+      const tooltipHtml = hintShort
+        ? `<div class="ia-chip-tooltip">${hintShort}<br><a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">View profile ↗</a></div>`
+        : `<div class="ia-chip-tooltip"><a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">View profile ↗</a></div>`;
       chip.innerHTML = imgHtml + `<span>${esc(name)}</span>${countHtml}` + tooltipHtml;
       chip.onclick = () => {
         if (activePubkeys.has(p.pubkey)) {
