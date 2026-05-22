@@ -155,7 +155,7 @@ def _decode_note1(note: str) -> str | None:
 
 # ── Metadata and event fetching ──────────────────────────────────────────────
 
-def _fetch_metadata_batch(pubkeys: set[str], relay_urls: list[str]) -> dict[str, str]:
+async def _fetch_metadata_batch(pubkeys: set[str], relay_urls: list[str]) -> dict[str, str]:
     """Fetch kind:0 metadata for pubkeys from relays. Returns {hex_pk: display_name}."""
     names: dict[str, str] = {}
     if not pubkeys or not relay_urls:
@@ -210,7 +210,7 @@ def _fetch_metadata_batch(pubkeys: set[str], relay_urls: list[str]) -> dict[str,
     for i in range(0, len(pk_list), batch_size):
         batch = pk_list[i : i + batch_size]
         try:
-            batch_results = asyncio.run(_fetch_batch(batch))
+            batch_results = await _fetch_batch(batch)
             names.update(batch_results)
         except Exception as e:
             log.warning("metadata batch %d-%d failed: %s", i, i + len(batch), e)
@@ -285,7 +285,7 @@ MAX_PK_REFS_PER_NOTE = 20    # max npub/nprofile username lookups per note
 MAX_EVENT_REFS_PER_NOTE = 10  # max nevent/naddr/note1 event fetches per note
 
 
-def enrich_notes(notes: list[NormalizedNote], relay_urls: list[str], label_map: dict[str, str]) -> None:
+async def enrich_notes(notes: list[NormalizedNote], relay_urls: list[str], label_map: dict[str, str]) -> None:
     """Enrich note content in-place: resolve names, referenced events.
 
     Modifies notes[i].content with enriched versions.
@@ -370,7 +370,7 @@ def enrich_notes(notes: list[NormalizedNote], relay_urls: list[str], label_map: 
     # Fetch metadata for referenced pubkeys
     name_lookup = dict(label_map)
     if referenced_pks:
-        fetched = _fetch_metadata_batch(referenced_pks, relay_urls)
+        fetched = await _fetch_metadata_batch(referenced_pks, relay_urls)
         name_lookup.update(fetched)
         log.info("resolved %d/%d pubkey names", len(fetched), len(referenced_pks))
 
@@ -721,7 +721,7 @@ async def sync_and_index(hf_api_key: str = "", full: bool = False) -> int:
         return 0
 
     # Enrich content: resolve names, referenced events
-    enrich_notes(notes, settings.relay_list, settings.pubkey_label_map)
+    await enrich_notes(notes, settings.relay_list, settings.pubkey_label_map)
 
     log.info("embedding %d events...", len(notes))
     contents = [n.content for n in notes]
