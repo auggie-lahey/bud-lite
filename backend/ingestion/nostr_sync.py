@@ -497,6 +497,28 @@ class NormalizedNote:
 PAGE_SIZE = 500  # Most relays cap at 500 per request
 
 
+def _discover_relays(pubkeys: list[str], relay_urls: list[str]) -> list[str]:
+    """Query kind 10002 (NIP-65 relay list) for each pubkey, merge with defaults."""
+    discovered: set[str] = set()
+    for relay_url in relay_urls[:2]:
+        try:
+            filt = {"kinds": [10002], "authors": pubkeys, "limit": len(pubkeys)}
+            raw_events = _query_relay(relay_url, filt, timeout=10.0)
+            for ev in raw_events:
+                for tag in ev.get("tags", []):
+                    if tag[0] == "r" and tag[1].startswith("wss://"):
+                        discovered.add(tag[1].rstrip("/"))
+            log.info("discovered %d relay URLs from %s", len(raw_events), relay_url)
+        except Exception as e:
+            log.debug("relay discovery from %s failed: %s", relay_url, e)
+
+    # Merge: user relays first (they publish there), then defaults
+    merged = list(discovered) + [r for r in relay_urls if r not in discovered]
+    log.info("relay discovery: %d user relays + %d defaults = %d total",
+             len(discovered), len(relay_urls) - len(discovered & set(relay_urls)), len(merged))
+    return merged
+
+
 def fetch_all_notes(
     pubkeys: list[str] | None = None,
     relay_urls: list[str] | None = None,
@@ -516,6 +538,9 @@ def fetch_all_notes(
     pubkeys = pubkeys or settings.pubkey_list
     relay_urls = relay_urls or settings.relay_list
 
+    # Discover user-specific relays from kind 10002
+    all_relays = _discover_relays(pubkeys, relay_urls)
+
     seen_ids: set[str] = set()
     all_notes: list[NormalizedNote] = []
     pk_counts: dict[str, int] = {}
@@ -524,7 +549,7 @@ def fetch_all_notes(
         pk_label = settings.pubkey_label_map.get(pubkey, pubkey[:8])
         pk_new = 0
 
-        for relay_url in relay_urls:
+        for relay_url in all_relays:
             relay_host = relay_url.replace("wss://", "")
             relay_total = 0
             until = 0  # 0 = no upper bound, get most recent first
@@ -917,23 +942,25 @@ async def enrich_npubs() -> int:
         name_lookup.update(fetched)
         log.info("npub: resolved %d/%d names", len(fetched), len(referenced_pks))
 
-    pk_remaining = [MAX_PK_REFS_PER_NOTE]
     subs = [0]
-    def _replace(match):
-        if pk_remaining[0] <= 0:
-            return match.group(0)
-        npub_str = match.group(0).replace("nostr:", "")
-        pk = _decode_npub(npub_str)
-        if pk and pk in name_lookup:
-            pk_remaining[0] -= 1
-            subs[0] += 1
-            replacement = f"@{name_lookup[pk]}"
-            log.info("  npub %s → %s", npub_str[:20], replacement)
-            return replacement
-        return npub_str
+    def _replace_factory():
+        pk_remaining = [MAX_PK_REFS_PER_NOTE]
+        def _replace(match):
+            if pk_remaining[0] <= 0:
+                return match.group(0)
+            npub_str = match.group(0).replace("nostr:", "")
+            pk = _decode_npub(npub_str)
+            if pk and pk in name_lookup:
+                pk_remaining[0] -= 1
+                subs[0] += 1
+                replacement = f"@{name_lookup[pk]}"
+                log.info("  npub %s → %s", npub_str[:20], replacement)
+                return replacement
+            return npub_str
+        return _replace
 
     for note in notes:
-        note.content = NPUB_RE.sub(_replace, note.content)
+        note.content = NPUB_RE.sub(_replace_factory(), note.content)
         note.content = note.content.replace("@@", "@")
 
     log.info("npub: %d substitutions across %d notes", subs[0], len(notes))
@@ -965,23 +992,25 @@ async def enrich_nprofiles() -> int:
         name_lookup.update(fetched)
         log.info("nprofile: resolved %d/%d names", len(fetched), len(referenced_pks))
 
-    pk_remaining = [MAX_PK_REFS_PER_NOTE]
     subs = [0]
-    def _replace(match):
-        if pk_remaining[0] <= 0:
-            return match.group(0)
-        original = match.group(0)
-        pk = _decode_nprofile(original)
-        if pk and pk in name_lookup:
-            pk_remaining[0] -= 1
-            subs[0] += 1
-            replacement = f"@{name_lookup[pk]}"
-            log.info("  nprofile %s → %s", original[:20], replacement)
-            return replacement
-        return original.replace("nostr:", "")
+    def _replace_factory():
+        pk_remaining = [MAX_PK_REFS_PER_NOTE]
+        def _replace(match):
+            if pk_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0)
+            pk = _decode_nprofile(original)
+            if pk and pk in name_lookup:
+                pk_remaining[0] -= 1
+                subs[0] += 1
+                replacement = f"@{name_lookup[pk]}"
+                log.info("  nprofile %s → %s", original[:20], replacement)
+                return replacement
+            return original.replace("nostr:", "")
+        return _replace
 
     for note in notes:
-        note.content = NPROFILE_RE.sub(_replace, note.content)
+        note.content = NPROFILE_RE.sub(_replace_factory(), note.content)
         note.content = note.content.replace("@@", "@")
 
     log.info("nprofile: %d substitutions across %d notes", subs[0], len(notes))
@@ -1020,33 +1049,35 @@ def enrich_nevents() -> int:
     event_lookup = _fetch_referenced_events(event_ids, [], settings.relay_list)
     log.info("nevent: fetched %d/%d events", len(event_lookup), len(event_ids))
 
-    event_remaining = [MAX_EVENT_REFS_PER_NOTE]
     subs = [0]
-    def _replace(match):
-        if event_remaining[0] <= 0:
-            return match.group(0)
-        original = match.group(0)
-        decoded = _decode_nevent(original)
-        if not decoded:
-            return original.replace("nostr:", "")
-        ev = event_lookup.get(decoded["event_id"])
-        if not ev:
-            return original.replace("nostr:", "")
-        event_remaining[0] -= 1
-        subs[0] += 1
-        author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
-        preview = ev.get("content", "")[:100].replace("\n", " ").strip()
-        if ev.get("title"):
-            replacement = f"[{ev['title']} by @{author}]"
-        elif preview:
-            replacement = f'[quoting @{author}: "{preview}..."]'
-        else:
-            replacement = f"[event by @{author}]"
-        log.info("  nevent %s → %s", original[:20], replacement[:60])
-        return replacement
+    def _replace_factory():
+        event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+        def _replace(match):
+            if event_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0)
+            decoded = _decode_nevent(original)
+            if not decoded:
+                return original.replace("nostr:", "")
+            ev = event_lookup.get(decoded["event_id"])
+            if not ev:
+                return original.replace("nostr:", "")
+            event_remaining[0] -= 1
+            subs[0] += 1
+            author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
+            preview = ev.get("content", "")[:100].replace("\n", " ").strip()
+            if ev.get("title"):
+                replacement = f"[{ev['title']} by @{author}]"
+            elif preview:
+                replacement = f'[quoting @{author}: "{preview}..."]'
+            else:
+                replacement = f"[event by @{author}]"
+            log.info("  nevent %s → %s", original[:20], replacement[:60])
+            return replacement
+        return _replace
 
     for note in notes:
-        note.content = NEVENT_RE.sub(_replace, note.content)
+        note.content = NEVENT_RE.sub(_replace_factory(), note.content)
 
     log.info("nevent: %d substitutions across %d notes", subs[0], len(notes))
     _save_notes(notes, BATCH_FILE)
@@ -1084,31 +1115,33 @@ def enrich_naddrs() -> int:
     event_lookup = _fetch_referenced_events(set(), naddr_refs, settings.relay_list)
     log.info("naddr: fetched %d/%d articles", len(event_lookup), len(naddr_refs))
 
-    event_remaining = [MAX_EVENT_REFS_PER_NOTE]
     subs = [0]
-    def _replace(match):
-        if event_remaining[0] <= 0:
-            return match.group(0)
-        original = match.group(0)
-        decoded = _decode_naddr(original)
-        if not decoded:
-            return original.replace("nostr:", "")
-        event_remaining[0] -= 1
-        subs[0] += 1
-        key = f"naddr:{decoded['author_pk']}:{decoded['kind']}:{decoded['d_tag']}"
-        ev = event_lookup.get(key)
-        author = name_lookup.get(decoded.get("author_pk", ""), decoded.get("author_pk", "")[:8])
-        if ev and ev.get("title"):
-            replacement = f"[{ev['title']} by @{author}]"
-        elif ev and ev.get("summary"):
-            replacement = f"[article by @{author}: {ev['summary'][:80]}]"
-        else:
-            replacement = f"[article by @{author}]"
-        log.info("  naddr %s → %s", original[:20], replacement[:60])
-        return replacement
+    def _replace_factory():
+        event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+        def _replace(match):
+            if event_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0)
+            decoded = _decode_naddr(original)
+            if not decoded:
+                return original.replace("nostr:", "")
+            event_remaining[0] -= 1
+            subs[0] += 1
+            key = f"naddr:{decoded['author_pk']}:{decoded['kind']}:{decoded['d_tag']}"
+            ev = event_lookup.get(key)
+            author = name_lookup.get(decoded.get("author_pk", ""), decoded.get("author_pk", "")[:8])
+            if ev and ev.get("title"):
+                replacement = f"[{ev['title']} by @{author}]"
+            elif ev and ev.get("summary"):
+                replacement = f"[article by @{author}: {ev['summary'][:80]}]"
+            else:
+                replacement = f"[article by @{author}]"
+            log.info("  naddr %s → %s", original[:20], replacement[:60])
+            return replacement
+        return _replace
 
     for note in notes:
-        note.content = NADDR_RE.sub(_replace, note.content)
+        note.content = NADDR_RE.sub(_replace_factory(), note.content)
 
     log.info("naddr: %d substitutions across %d notes", subs[0], len(notes))
     _save_notes(notes, BATCH_FILE)
@@ -1142,28 +1175,30 @@ def enrich_note1s() -> int:
         name_lookup.update(fetched)
     log.info("note1: fetched %d/%d notes", len(event_lookup), len(event_ids))
 
-    event_remaining = [MAX_EVENT_REFS_PER_NOTE]
     subs = [0]
-    def _replace(match):
-        if event_remaining[0] <= 0:
-            return match.group(0)
-        original = match.group(0).replace("nostr:", "")
-        eid = _decode_note1(original)
-        if not eid:
-            return original
-        ev = event_lookup.get(eid)
-        if not ev:
-            return original
-        event_remaining[0] -= 1
-        subs[0] += 1
-        author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
-        preview = ev.get("content", "")[:100].replace("\n", " ").strip()
-        if preview:
-            replacement = f'[quoting @{author}: "{preview}..."]'
-        else:
-            replacement = f"[note by @{author}]"
-        log.info("  note1 %s → %s", original[:20], replacement[:60])
-        return replacement
+    def _replace_factory():
+        event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+        def _replace(match):
+            if event_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0).replace("nostr:", "")
+            eid = _decode_note1(original)
+            if not eid:
+                return original
+            ev = event_lookup.get(eid)
+            if not ev:
+                return original
+            event_remaining[0] -= 1
+            subs[0] += 1
+            author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
+            preview = ev.get("content", "")[:100].replace("\n", " ").strip()
+            if preview:
+                replacement = f'[quoting @{author}: "{preview}..."]'
+            else:
+                replacement = f"[note by @{author}]"
+            log.info("  note1 %s → %s", original[:20], replacement[:60])
+            return replacement
+        return _replace
 
     for note in notes:
         note.content = NOTE_RE.sub(_replace, note.content)
