@@ -20,6 +20,7 @@ import logging
 import re
 import ssl
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -755,6 +756,107 @@ async def sync_and_index(hf_api_key: str = "", full: bool = False) -> int:
     # Update sync state after successful index
     update_sync_timestamps(settings.pubkey_list)
 
+    return count
+
+
+# ── Individual pipeline phases (for workflow step visibility) ─────────────────
+
+BATCH_FILE = Path("data/sync_batch.json")
+
+
+def _save_notes(notes: list[NormalizedNote], path: Path) -> None:
+    """Serialize notes to JSON."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = []
+    for n in notes:
+        data.append({
+            "event_id": n.event_id, "pubkey": n.pubkey, "content": n.content,
+            "created_at": n.created_at, "kind": n.kind, "hashtags": n.hashtags,
+            "source_type": n.source_type, "title": n.title, "summary": n.summary,
+            "d_tag": n.d_tag, "reply_to_id": n.reply_to_id,
+            "reply_to_pubkey": n.reply_to_pubkey, "mentioned_pubkeys": n.mentioned_pubkeys,
+        })
+    with open(path, "w") as f:
+        json.dump(data, f)
+    log.info("saved %d notes to %s", len(notes), path)
+
+
+def _load_notes(path: Path) -> list[NormalizedNote]:
+    """Deserialize notes from JSON."""
+    with open(path) as f:
+        data = json.load(f)
+    notes = []
+    for d in data:
+        notes.append(NormalizedNote(**d))
+    log.info("loaded %d notes from %s", len(notes), path)
+    return notes
+
+
+def fetch_notes(full: bool = False) -> int:
+    """Phase 1: Fetch notes from relays. Saves to data/sync_batch.json."""
+    from ingestion.sync_state import load_sync_state, update_sync_timestamps
+
+    settings = get_settings()
+    since = 0
+    if not full:
+        state = load_sync_state()
+        if state:
+            since = min(state.values())
+            log.info("incremental fetch since %d", since)
+
+    notes = fetch_all_notes(since=since)
+    if not notes:
+        log.warning("no events fetched")
+        if not full:
+            update_sync_timestamps(settings.pubkey_list)
+        return 0
+
+    _save_notes(notes, BATCH_FILE)
+    return len(notes)
+
+
+async def enrich_notes_file() -> int:
+    """Phase 2: Enrich notes from data/sync_batch.json (names + events)."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+    await enrich_notes(notes, settings.relay_list, settings.pubkey_label_map)
+    _save_notes(notes, BATCH_FILE)
+    return len(notes)
+
+
+async def embed_and_index(hf_api_key: str = "") -> int:
+    """Phase 3: Embed enriched notes and index to Qdrant."""
+    from ingestion.embedder import embed_texts
+    from ingestion.indexer import ensure_collection, build_note_point, upsert_points
+    from ingestion.sync_state import update_sync_timestamps
+
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    log.info("embedding %d events...", len(notes))
+    contents = [n.content for n in notes]
+    vectors = await embed_texts(contents, api_key=hf_api_key)
+
+    label_map = settings.pubkey_label_map
+    points = []
+    for note, vector in zip(notes, vectors):
+        if vector is None:
+            continue
+        point = build_note_point(
+            event_id=note.event_id, vector=vector, pubkey=note.pubkey,
+            content=note.content, created_at=note.created_at,
+            hashtags=note.hashtags, author_label=label_map.get(note.pubkey, ""),
+            source_type=note.source_type, kind=note.kind,
+            reply_to_id=note.reply_to_id, reply_to_pubkey=note.reply_to_pubkey,
+            mentioned_pubkeys=note.mentioned_pubkeys,
+        )
+        points.append(point)
+
+    client = ensure_collection()
+    count = upsert_points(points, client=client)
+    log.info("indexed %d events", count)
+
+    update_sync_timestamps(settings.pubkey_list)
     return count
 
 

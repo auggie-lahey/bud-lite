@@ -127,15 +127,25 @@ jobs:
         if: env.HAS_CREDENTIALS == 'true'
         run: pip install -r requirements.txt
 
-      - name: Run Nostr sync (fetch, enrich, embed, index)
+      - name: Fetch notes from relays
         if: env.HAS_CREDENTIALS == 'true'
-        id: sync
+        id: fetch
         run: |
           FULL_FLAG=""
           if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then
             FULL_FLAG="--full"
           fi
-          python -m worker.runner sync $FULL_FLAG
+          python -m worker.runner fetch $FULL_FLAG
+
+      - name: Enrich notes (resolve usernames + referenced events)
+        if: env.HAS_CREDENTIALS == 'true'
+        id: enrich
+        run: python -m worker.runner enrich
+
+      - name: Embed and index to Qdrant
+        if: env.HAS_CREDENTIALS == 'true'
+        id: index
+        run: python -m worker.runner index
 
       - name: Commit changes
         if: env.HAS_CREDENTIALS == 'true'
