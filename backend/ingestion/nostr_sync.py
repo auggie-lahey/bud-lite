@@ -777,12 +777,14 @@ async def sync_and_index(hf_api_key: str = "", full: bool = False) -> int:
 BATCH_FILE = Path("data/sync_batch.json")
 
 
-def _save_notes(notes: list[NormalizedNote], path: Path) -> None:
+BATCH_META_KEY = "_meta"
+
+def _save_notes(notes: list[NormalizedNote], path: Path, full: bool = False) -> None:
     """Serialize notes to JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = []
+    items = []
     for n in notes:
-        data.append({
+        items.append({
             "event_id": n.event_id, "pubkey": n.pubkey, "content": n.content,
             "created_at": n.created_at, "kind": n.kind, "hashtags": n.hashtags,
             "source_type": n.source_type, "title": n.title, "summary": n.summary,
@@ -790,19 +792,35 @@ def _save_notes(notes: list[NormalizedNote], path: Path) -> None:
             "reply_to_pubkey": n.reply_to_pubkey, "mentioned_pubkeys": n.mentioned_pubkeys,
         })
     with open(path, "w") as f:
-        json.dump(data, f)
-    log.info("saved %d notes to %s", len(notes), path)
+        json.dump({"_meta": {"full": full}, "notes": items}, f)
+    log.info("saved %d notes to %s (full=%s)", len(notes), path, full)
 
 
 def _load_notes(path: Path) -> list[NormalizedNote]:
     """Deserialize notes from JSON."""
     with open(path) as f:
         data = json.load(f)
+    # Handle both old format (list) and new format (dict with _meta)
+    if isinstance(data, dict):
+        items = data.get("notes", [])
+    else:
+        items = data
     notes = []
-    for d in data:
+    for d in items:
         notes.append(NormalizedNote(**d))
     log.info("loaded %d notes from %s", len(notes), path)
     return notes
+
+
+def _is_full_sync(path: Path) -> bool:
+    """Check if the batch file was created from a full sync."""
+    if not path.exists():
+        return False
+    with open(path) as f:
+        data = json.load(f)
+    if isinstance(data, dict):
+        return data.get("_meta", {}).get("full", False)
+    return False
 
 
 def fetch_notes(full: bool = False) -> int:
@@ -824,7 +842,7 @@ def fetch_notes(full: bool = False) -> int:
             update_sync_timestamps(settings.pubkey_list)
         return 0
 
-    _save_notes(notes, BATCH_FILE)
+    _save_notes(notes, BATCH_FILE, full=full)
     return len(notes)
 
 
@@ -1181,11 +1199,22 @@ async def enrich_notes_file() -> int:
 async def embed_and_index(hf_api_key: str = "") -> int:
     """Phase 3: Embed enriched notes and index to Qdrant."""
     from ingestion.embedder import embed_texts
-    from ingestion.indexer import ensure_collection, build_note_point, upsert_points
+    from ingestion.indexer import ensure_collection, build_note_point, upsert_points, get_qdrant_client
     from ingestion.sync_state import update_sync_timestamps
 
     settings = get_settings()
     notes = _load_notes(BATCH_FILE)
+
+    # Full sync: drop and recreate collection to clear stale data
+    full = _is_full_sync(BATCH_FILE)
+    if full:
+        from qdrant_client import QdrantClient
+        client = get_qdrant_client()
+        existing = [c.name for c in client.get_collections().collections]
+        if settings.collection_name in existing:
+            log.info("full sync: dropping collection '%s'", settings.collection_name)
+            client.delete_collection(settings.collection_name)
+            log.info("collection dropped, will recreate on upsert")
 
     log.info("embedding %d events...", len(notes))
     contents = [n.content for n in notes]
