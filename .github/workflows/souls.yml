@@ -1,10 +1,16 @@
 name: Generate Soul Hints
 
 on:
-  schedule:
-    # Every Monday at 04:00 UTC
-    - cron: '0 4 * * 1'
+  # Triggered automatically after successful sync
+  workflow_run:
+    workflows: ["Terraform + Sync"]
+    types: [completed]
+    branches: [main]
+  # Manual trigger (independent run)
   workflow_dispatch:
+  # Weekly fallback
+  schedule:
+    - cron: '0 4 * * 1'
 
 permissions:
   contents: write
@@ -19,6 +25,11 @@ env:
 jobs:
   generate-souls:
     runs-on: ubuntu-latest
+    # Only run if triggered by successful sync, manual dispatch, or schedule
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     defaults:
       run:
         working-directory: backend
