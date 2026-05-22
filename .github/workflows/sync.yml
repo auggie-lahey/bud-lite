@@ -140,11 +140,6 @@ jobs:
           fi
           python -m worker.runner sync $FULL_FLAG
 
-      - name: Generate soul hints (optional — needs LLM_API_KEY)
-        if: env.HAS_CREDENTIALS == 'true' && env.DEV_LLM_KEY != ''
-        continue-on-error: true
-        run: python -m worker.runner souls
-
       - name: Copy soul-hints to consumer-site
         if: always()
         continue-on-error: true

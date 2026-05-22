@@ -1,0 +1,102 @@
+name: Generate Soul Hints
+
+on:
+  schedule:
+    # Every Monday at 04:00 UTC
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
+  DEV_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+  DEV_LLM_MODEL: ${{ vars.LLM_MODEL }}
+  PUBKEYS: ${{ vars.PUBKEYS }}
+  PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
+
+jobs:
+  generate-souls:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Qdrant credentials
+        run: |
+          if [ -f ../iac/terraform.tfstate ]; then
+            URL=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('cluster_url',{}).get('value',''))" 2>/dev/null || echo '')
+            KEY=$(python3 -c "import json; d=json.load(open('../iac/terraform.tfstate')); print(d.get('outputs',{}).get('app_api_key',{}).get('value',''))" 2>/dev/null || echo '')
+          fi
+          URL="${URL:-${{ vars.QDRANT_URL }}}"
+          KEY="${KEY:-${{ secrets.QDRANT_API_KEY }}}"
+          if [ -z "$URL" ] || [ -z "$DEV_LLM_KEY" ]; then
+            echo "::warning::Missing QDRANT_URL or LLM_API_KEY. Skipping."
+            echo "HAS_CREDENTIALS=false" >> $GITHUB_ENV
+          else
+            echo "QDRANT_URL=$URL" >> $GITHUB_ENV
+            echo "QDRANT_API_KEY=$KEY" >> $GITHUB_ENV
+            echo "HAS_CREDENTIALS=true" >> $GITHUB_ENV
+          fi
+
+      - uses: actions/setup-python@v5
+        if: env.HAS_CREDENTIALS == 'true'
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        if: env.HAS_CREDENTIALS == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Generate soul files and hints
+        if: env.HAS_CREDENTIALS == 'true'
+        run: python -m worker.runner souls
+
+      - name: Copy soul-hints to consumer-site
+        if: env.HAS_CREDENTIALS == 'true'
+        run: |
+          mkdir -p ../consumer-site/public
+          if [ -f data/souls/hints.json ]; then
+            cp data/souls/hints.json ../consumer-site/public/soul-hints.json
+            echo "Copied soul-hints.json"
+            # Also update pictures from existing file if present
+            if [ -f ../consumer-site/public/soul-hints.json ]; then
+              python3 -c "
+          import json
+          with open('../consumer-site/public/soul-hints.json') as f:
+              data = json.load(f)
+          # Ensure labels and pictures from PUBKEY_LABELS are included
+          import os
+          pubkeys = [p.strip() for p in os.environ.get('PUBKEYS', '').split(',') if p.strip()]
+          labels_raw = os.environ.get('PUBKEY_LABELS', '{}')
+          try: labels = json.loads(labels_raw)
+          except: labels = {}
+          data.setdefault('labels', {}).update(labels)
+          with open('../consumer-site/public/soul-hints.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          print(f'Updated soul-hints.json with {len(data.get(\"hints\", {}))} hints')
+          "
+            fi
+          else
+            echo "::warning::No hints.json generated"
+          fi
+
+      - name: Commit and push
+        if: env.HAS_CREDENTIALS == 'true'
+        run: |
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add consumer-site/public/soul-hints.json backend/data/souls/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: regenerate soul hints [skip ci]"
+            git push
+          fi
