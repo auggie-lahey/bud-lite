@@ -785,6 +785,13 @@ html[data-view="list"] .ia-dropdown { top: auto; left: auto; right: 4px; bottom:
 .ia-profile-soul-content h1, .ia-profile-soul-content h2, .ia-profile-soul-content h3 { color: #6ee7b7; margin: 0.8em 0 0.4em; }
 .ia-profile-soul-content ul, .ia-profile-soul-content ol { padding-left: 1.2em; }
 .ia-profile-soul-content li { margin: 0.3em 0; }
+.ia-profile-soul-full { font-size: 0.85rem; line-height: 1.6; color: #aaa; max-height: 600px; overflow-y: auto; padding-right: 0.5em; }
+.ia-profile-soul-full h1, .ia-profile-soul-full h2, .ia-profile-soul-full h3 { color: #6ee7b7; margin: 0.8em 0 0.4em; }
+.ia-profile-soul-full ul, .ia-profile-soul-full ol { padding-left: 1.2em; }
+.ia-profile-soul-full li { margin: 0.3em 0; }
+.ia-profile-soul-full p { margin: 0.4em 0; }
+.ia-profile-collapse-icon { font-size: 0.7rem; margin-left: 0.5em; color: #888; }
+.ia-profile-badge { font-size: 0.7rem; background: #1e293b; color: #6ee7b7; padding: 0.15em 0.5em; border-radius: 4px; font-weight: 400; }
 .ia-profile-micro { font-size: 0.85rem; color: #aaa; font-style: italic; line-height: 1.5; }
 .ia-profile-footer { margin-top: 2em; }
 .ia-profile-disclaimer { font-size: 0.75rem; color: #555; margin: 0 0 1em; }

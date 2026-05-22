@@ -1,7 +1,7 @@
 /**
  * Profile page — shows a user's distilled Nostr profile.
  * Route: /:npub  (e.g. /npub1abc123...)
- * Shows: avatar, name, npub, compact soul (~1000 tokens), micro summary
+ * Shows: avatar, name, npub, compact soul (~1000 tokens), micro summary, full soul (~20K tokens)
  */
 
 export function profilePage(params, store) {
@@ -23,11 +23,16 @@ export function profilePage(params, store) {
       return;
     }
 
+    // Load soul-hints.json and full soul .md in parallel
+    const [dataResp, soulResp] = await Promise.all([
+      fetch(`${import.meta.env.BASE_URL}soul-hints.json`).catch(() => null),
+      fetch(`${import.meta.env.BASE_URL}souls/${pubkey}.md`).catch(() => null),
+    ]);
+
     let data = null;
-    try {
-      const resp = await fetch(`${import.meta.env.BASE_URL}soul-hints.json`);
-      if (resp.ok) data = await resp.json();
-    } catch {}
+    let fullSoul = '';
+    if (dataResp && dataResp.ok) data = await dataResp.json();
+    if (soulResp && soulResp.ok) fullSoul = await soulResp.text();
 
     if (!data) {
       container.innerHTML = '<div class="ia-profile-error">Failed to load profile data.</div>';
@@ -39,7 +44,9 @@ export function profilePage(params, store) {
     const labels = data.labels || {};
     const pictures = data.pictures || {};
 
-    if (!labels[pubkey]) {
+    // Check if pubkey exists in any dataset
+    const hasProfile = labels[pubkey] || hints[pubkey] || micros[pubkey] || fullSoul;
+    if (!hasProfile) {
       container.innerHTML = '<div class="ia-profile-error">Profile not found.</div><a href="#/chat" class="ia-profile-back">← Back to chat</a>';
       return;
     }
@@ -49,9 +56,12 @@ export function profilePage(params, store) {
     const hint = hints[pubkey] || '';
     const micro = micros[pubkey] || '';
 
+    // Count approximate tokens in full soul
+    const soulTokenEst = fullSoul ? Math.floor(fullSoul.length / 4) : 0;
+
     container.innerHTML = `
       <div class="ia-profile-header">
-        ${picture ? `<img src="${esc(picture)}" class="ia-profile-avatar" alt="${esc(label)}">` : `<div class="ia-profile-avatar-placeholder">${esc(label[0].toUpperCase())}</div>`}
+        ${picture ? `<img src="${esc(picture)}" class="ia-profile-avatar" alt="${esc(label)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="ia-profile-avatar-placeholder" style="display:none">${esc(label[0].toUpperCase())}</div>` : `<div class="ia-profile-avatar-placeholder">${esc(label[0].toUpperCase())}</div>`}
         <div class="ia-profile-header-info">
           <h1 class="ia-profile-name">${esc(label)}</h1>
           <div class="ia-profile-npub">${esc(npub)}</div>
@@ -74,11 +84,38 @@ export function profilePage(params, store) {
         <div class="ia-profile-micro">${esc(micro)}</div>
       </div>` : ''}
 
+      ${fullSoul ? `
+      <div class="ia-profile-section">
+        <h2 class="ia-profile-section-title" style="cursor:pointer" id="ia-full-soul-toggle">
+          Full Soul <span class="ia-profile-badge">~${soulTokenEst.toLocaleString()} tokens</span>
+          <span class="ia-profile-collapse-icon" id="ia-soul-collapse-icon">▼</span>
+        </h2>
+        <p class="ia-profile-section-desc">Complete AI-generated profile from all their Nostr posts</p>
+        <div class="ia-profile-soul-full" id="ia-full-soul-content">
+          ${simpleMarkdown(fullSoul)}
+        </div>
+      </div>` : ''}
+
       <div class="ia-profile-footer">
         <p class="ia-profile-disclaimer">Auto-generated from public Nostr posts. May contain inaccuracies.
         <a href="https://primal.net/p/${pubkey}" target="_blank">See original posts ↗</a></p>
         <a href="#/chat" class="ia-profile-back">← Back to chat</a>
       </div>`;
+
+    // Collapsible full soul section
+    const toggle = document.getElementById('ia-full-soul-toggle');
+    const content = document.getElementById('ia-full-soul-content');
+    const icon = document.getElementById('ia-soul-collapse-icon');
+    if (toggle && content) {
+      // Default collapsed
+      content.style.display = 'none';
+      icon.textContent = '▶';
+      toggle.addEventListener('click', () => {
+        const open = content.style.display !== 'none';
+        content.style.display = open ? 'none' : 'block';
+        icon.textContent = open ? '▶' : '▼';
+      });
+    }
 
   })();
 
