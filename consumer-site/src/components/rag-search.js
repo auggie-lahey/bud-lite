@@ -159,7 +159,7 @@ export function mountRagChat(container) {
       const imgHtml = p.picture
         ? `<img src="${esc(p.picture)}" class="pfp-img"><span class="no-pfp">${initial}</span>`
         : `<span class="no-pfp">${initial}</span>`;
-      const profileLink = `#/p/${encodeURIComponent(name)}`;
+      const profileLink = `#/p/${p.pubkey}`;
       const externalLink = `https://primal.net/p/${p.pubkey}`;
       // Truncate hint for tooltip (first ~300 chars)
       const hintShort = p.micro ? esc(p.micro.slice(0, 300)) + (p.micro.length > 300 ? '...' : '') : '';
