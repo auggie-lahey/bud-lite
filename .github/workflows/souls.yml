@@ -11,8 +11,8 @@ permissions:
 
 env:
   DEV_LLM_KEY: ${{ secrets.LLM_API_KEY }}
-  DEV_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-  DEV_LLM_MODEL: ${{ vars.LLM_MODEL }}
+  DEV_LLM_BASE_URL: "https://api.z.ai/api/coding/paas/v4"
+  DEV_LLM_MODEL: "GLM-5.1"
   PUBKEYS: ${{ vars.PUBKEYS }}
   PUBKEY_LABELS: ${{ vars.PUBKEY_LABELS }}
 
