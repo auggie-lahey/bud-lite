@@ -512,6 +512,7 @@ def fetch_all_notes(
 
     seen_ids: set[str] = set()
     all_notes: list[NormalizedNote] = []
+    pk_counts: dict[str, int] = {}  # pubkey -> count
 
     for pubkey in pubkeys:
         filter_obj: dict = {
@@ -523,9 +524,12 @@ def fetch_all_notes(
         if since:
             filter_obj["since"] = since
 
+        pk_label = settings.pubkey_label_map.get(pubkey, pubkey[:8])
+        pk_new = 0
         for relay_url in relay_urls:
             try:
                 raw_events = _query_relay(relay_url, filter_obj, timeout=timeout)
+                relay_new = 0
                 for ev in raw_events:
                     ev_id = ev.get("id", "")
                     if ev_id and ev_id not in seen_ids:
@@ -533,14 +537,23 @@ def fetch_all_notes(
                         note = _normalize_event(ev, settings.pubkey_label_map)
                         if note:
                             all_notes.append(note)
-                log.info("relay %s: got events for %s (%d total)", relay_url, pubkey[:8], len(all_notes))
+                            relay_new += 1
+                            pk_new += 1
+                log.info("  %s on %s: %d new events", pk_label, relay_url.replace("wss://", ""), relay_new)
             except Exception as e:
                 log.warning("relay %s failed: %s", relay_url, e)
                 continue
 
+        pk_counts[pubkey] = pk_new
+        if pk_new:
+            log.info("  %s total: %d events", pk_label, pk_new)
+
     all_notes.sort(key=lambda n: n.created_at, reverse=True)
     mode = "incremental" if since else "full"
-    log.info("fetched %d events from %d pubkeys (%s sync)", len(all_notes), len(pubkeys), mode)
+    log.info("fetched %d unique events from %d pubkeys (%s sync)", len(all_notes), len(pubkeys), mode)
+    for pk, count in pk_counts.items():
+        label = settings.pubkey_label_map.get(pk, pk[:8])
+        log.info("  %s: %d events", label, count)
     return all_notes
 
 
