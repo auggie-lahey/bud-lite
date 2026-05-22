@@ -93,10 +93,12 @@ jobs:
           cd ..
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
           git add consumer-site/public/soul-hints.json
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             git commit -m "chore: regenerate soul hints [skip ci]"
+            git pull --rebase origin main || true
             git push
           fi
