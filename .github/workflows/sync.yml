@@ -132,7 +132,6 @@ jobs:
       - name: Run Nostr sync
         if: env.HAS_CREDENTIALS == 'true'
         id: sync
-        continue-on-error: true
         run: |
           FULL_FLAG=""
           if [ "${{ github.event.inputs.full_sync }}" = "true" ]; then

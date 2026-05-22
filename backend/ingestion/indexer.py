@@ -114,6 +114,9 @@ def build_note_point(
     author_label: str = "",
     source_type: str = "nostr_note",
     kind: int = 1,
+    reply_to_id: str = "",
+    reply_to_pubkey: str = "",
+    mentioned_pubkeys: list[str] | None = None,
 ) -> models.PointStruct:
     """Build a Qdrant point for a Nostr event."""
     # Deterministic integer ID from event ID hex
@@ -129,6 +132,13 @@ def build_note_point(
         "source_type": source_type,
         "kind": kind,
     }
+    # Only add reply/tag fields when present (keeps payload small for simple notes)
+    if reply_to_id:
+        payload["reply_to_id"] = reply_to_id
+    if reply_to_pubkey:
+        payload["reply_to_pubkey"] = reply_to_pubkey
+    if mentioned_pubkeys:
+        payload["mentioned_pubkeys"] = mentioned_pubkeys
 
     return models.PointStruct(id=point_id, vector=vector, payload=payload)
 

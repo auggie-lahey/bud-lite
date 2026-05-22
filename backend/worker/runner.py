@@ -84,7 +84,7 @@ if __name__ == "__main__":
         cmd = sys.argv[1]
         full = "--full" in sys.argv
         if cmd == "sync":
-            run_all_syncs(hf_api_key=hf_key, full=full)
+            asyncio.run(run_nostr_sync(hf_api_key=hf_key, full=full))
         elif cmd == "souls":
             run_soul_generation()
         elif cmd == "file" and len(sys.argv) > 2:
@@ -98,4 +98,4 @@ if __name__ == "__main__":
             print("Usage: python -m worker.runner [sync [--full] | souls | file <path> [sha256] [mime]]")
             sys.exit(1)
     else:
-        run_all_syncs(hf_api_key=hf_key)
+        asyncio.run(run_nostr_sync(hf_api_key=hf_key))
