@@ -1201,7 +1201,7 @@ def enrich_note1s() -> int:
         return _replace
 
     for note in notes:
-        note.content = NOTE_RE.sub(_replace, note.content)
+        note.content = NOTE_RE.sub(_replace_factory(), note.content)
 
     log.info("note1: %d substitutions across %d notes", subs[0], len(notes))
     _save_notes(notes, BATCH_FILE)
