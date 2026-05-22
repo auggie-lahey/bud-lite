@@ -193,7 +193,7 @@ def _call_llm(system_prompt: str, user_content: str, api_key: str, base_url: str
                 {"role": "user", "content": user_content},
             ],
         },
-        timeout=120,
+        timeout=300,
     )
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
