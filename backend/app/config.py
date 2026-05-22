@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # Nostr relays (for sync pipeline)
     relay_urls: str = (
         "wss://relay.damus.io,wss://nos.lol,"
-        "wss://relay.primal.net"
+        "wss://relay.nostr.net"
     )
 
     # Pubkeys to index
