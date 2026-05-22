@@ -494,14 +494,20 @@ class NormalizedNote:
     mentioned_pubkeys: list[str] = field(default_factory=list)  # all p tag pubkeys
 
 
+PAGE_SIZE = 500  # Most relays cap at 500 per request
+
+
 def fetch_all_notes(
     pubkeys: list[str] | None = None,
     relay_urls: list[str] | None = None,
-    limit_per_pubkey: int = 2000,
+    limit_per_pubkey: int = 5000,
     timeout: float = 10.0,
     since: int = 0,
 ) -> list[NormalizedNote]:
     """Fetch events of all supported kinds for configured pubkeys.
+
+    Paginates through each relay using `until` timestamps to get past
+    relay-imposed page limits (usually 500 events per request).
 
     Args:
         since: Unix timestamp. Only fetch events newer than this. 0 = fetch all.
@@ -512,37 +518,73 @@ def fetch_all_notes(
 
     seen_ids: set[str] = set()
     all_notes: list[NormalizedNote] = []
-    pk_counts: dict[str, int] = {}  # pubkey -> count
+    pk_counts: dict[str, int] = {}
 
     for pubkey in pubkeys:
-        filter_obj: dict = {
-            "kinds": FETCH_KINDS,
-            "authors": [pubkey],
-            "limit": limit_per_pubkey,
-        }
-        # Incremental: only fetch events after last sync
-        if since:
-            filter_obj["since"] = since
-
         pk_label = settings.pubkey_label_map.get(pubkey, pubkey[:8])
         pk_new = 0
+
         for relay_url in relay_urls:
-            try:
-                raw_events = _query_relay(relay_url, filter_obj, timeout=timeout)
-                relay_new = 0
+            relay_host = relay_url.replace("wss://", "")
+            relay_total = 0
+            until = 0  # 0 = no upper bound, get most recent first
+            page = 0
+
+            while True:
+                page += 1
+                filter_obj: dict = {
+                    "kinds": FETCH_KINDS,
+                    "authors": [pubkey],
+                    "limit": PAGE_SIZE,
+                }
+                if since:
+                    filter_obj["since"] = since
+                if until:
+                    filter_obj["until"] = until
+
+                try:
+                    raw_events = _query_relay(relay_url, filter_obj, timeout=timeout)
+                except Exception as e:
+                    log.warning("  %s on %s page %d failed: %s", pk_label, relay_host, page, e)
+                    break
+
+                if not raw_events:
+                    break
+
+                # Count new (deduped) events from this page
+                page_new = 0
+                oldest_ts = float("inf")
                 for ev in raw_events:
                     ev_id = ev.get("id", "")
+                    ev_ts = ev.get("created_at", 0)
+                    if ev_ts and ev_ts < oldest_ts:
+                        oldest_ts = ev_ts
                     if ev_id and ev_id not in seen_ids:
                         seen_ids.add(ev_id)
                         note = _normalize_event(ev, settings.pubkey_label_map)
                         if note:
                             all_notes.append(note)
-                            relay_new += 1
+                            page_new += 1
                             pk_new += 1
-                log.info("  %s on %s: %d new events", pk_label, relay_url.replace("wss://", ""), relay_new)
-            except Exception as e:
-                log.warning("relay %s failed: %s", relay_url, e)
-                continue
+                            relay_total += 1
+
+                log.info("  %s on %s page %d: %d raw, %d new", pk_label, relay_host, page, len(raw_events), page_new)
+
+                # Stop if: no new events, got fewer than page size (last page), or hit limit
+                if len(raw_events) < PAGE_SIZE:
+                    break
+                if page_new == 0:
+                    break
+                if pk_new >= limit_per_pubkey:
+                    break
+
+                # Set until to oldest event timestamp for next page
+                if oldest_ts == float("inf"):
+                    break
+                until = int(oldest_ts)
+
+            if relay_total:
+                log.info("  %s on %s: %d total new events (%d pages)", pk_label, relay_host, relay_total, page)
 
         pk_counts[pubkey] = pk_new
         if pk_new:
