@@ -27,6 +27,7 @@ import { aboutPage } from './pages/about.js';
 import { archivePage } from './pages/archive.js';
 import { explorePage } from './pages/explore.js';
 import { chatPage } from './pages/chat.js';
+import { profilePage } from './pages/profile.js';
 
 // ── Constants ──────────────────────────────────────────────
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -507,6 +508,7 @@ const router = createRouter([
   { pattern: /^\/folder\/(.+)$/,            handler: folderPage },
   { pattern: /^\/details\/([0-9a-f]{64})$/, handler: detailsPage },
   { pattern: /^\/about$/,                   handler: aboutPage },
+  { pattern: /^\/p\/(.+)$/,                 handler: profilePage },
 ], store);
 
 // Hide footer on chat page (full-height chat needs the space)

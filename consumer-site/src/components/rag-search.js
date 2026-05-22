@@ -159,12 +159,13 @@ export function mountRagChat(container) {
       const imgHtml = p.picture
         ? `<img src="${esc(p.picture)}" class="pfp-img"><span class="no-pfp">${initial}</span>`
         : `<span class="no-pfp">${initial}</span>`;
-      const profileLink = `https://primal.net/p/${p.pubkey}`;
+      const profileLink = `#/p/${encodeURIComponent(name)}`;
+      const externalLink = `https://primal.net/p/${p.pubkey}`;
       // Truncate hint for tooltip (first ~300 chars)
       const hintShort = p.micro ? esc(p.micro.slice(0, 300)) + (p.micro.length > 300 ? '...' : '') : '';
       const tooltipHtml = hintShort
-        ? `<div class="ia-chip-tooltip">${hintShort}<br><a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">View profile ↗</a></div>`
-        : `<div class="ia-chip-tooltip"><a href="${profileLink}" target="_blank" onclick="event.stopPropagation()" style="color:#6ee7b7">View profile ↗</a></div>`;
+        ? `<div class="ia-chip-tooltip">${hintShort}<br><a href="${profileLink}" onclick="event.stopPropagation()" style="color:#6ee7b7">View distilled profile</a> · <a href="${externalLink}" target="_blank" onclick="event.stopPropagation()" style="color:#93c5fd">Nostr ↗</a></div>`
+        : `<div class="ia-chip-tooltip"><a href="${profileLink}" onclick="event.stopPropagation()" style="color:#6ee7b7">View profile</a> · <a href="${externalLink}" target="_blank" onclick="event.stopPropagation()" style="color:#93c5fd">Nostr ↗</a></div>`;
       chip.innerHTML = imgHtml + `<span>${esc(name)}</span>${countHtml}` + tooltipHtml;
       chip.onclick = () => {
         if (activePubkeys.has(p.pubkey)) {
