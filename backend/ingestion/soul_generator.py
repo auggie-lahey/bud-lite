@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import httpx
 from pathlib import Path
 
 import anthropic
@@ -156,6 +157,48 @@ def _format_notes_for_soul(notes: list[dict], label: str) -> str:
     return "\n".join(lines)
 
 
+def _call_llm(system_prompt: str, user_content: str, api_key: str, base_url: str, model: str, max_tokens: int = 4000) -> str:
+    """Call LLM — auto-detects Anthropic vs OpenAI-compatible format."""
+    base_url = base_url.rstrip("/")
+    is_anthropic = "anthropic.com" in base_url
+
+    if is_anthropic:
+        client = anthropic.Anthropic(api_key=api_key, base_url=base_url)
+        resp = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_content}],
+        )
+        return resp.content[0].text
+
+    # OpenAI-compatible (z.ai, OpenAI, etc.)
+    # Determine endpoint: if base_url ends with /v4 or /v1, append /chat/completions directly
+    if base_url.endswith(("/v4", "/v1", "/v4/", "/v1/")):
+        endpoint = f"{base_url}/chat/completions"
+    else:
+        endpoint = f"{base_url}/v1/chat/completions"
+
+    resp = httpx.post(
+        endpoint,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        json={
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+        },
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
 def generate_soul_file(
     pubkey: str,
     label: str = "",
@@ -201,13 +244,8 @@ def generate_soul_file(
         older_formatted = _format_notes_for_soul(sampled, f"{label} (older sampled)")
         formatted = recent + "\n\n[... sampled older posts ...]\n\n" + older_formatted
 
-    message = client.messages.create(
-        model=model,
-        max_tokens=8000,
-        system=SOUL_PROMPT,
-        messages=[{"role": "user", "content": formatted}],
-    )
-    soul_content = f"# Soul File: {label}\n\n> Generated from {len(notes)} posts by {label} ({pubkey[:12]}...)\n\n{message.content[0].text}"
+    soul_text = _call_llm(SOUL_PROMPT, formatted, api_key, base_url, model, max_tokens=8000)
+    soul_content = f"# Soul File: {label}\n\n> Generated from {len(notes)} posts by {label} ({pubkey[:12]}...)\n\n{soul_text}"
 
     # Save soul file
     SOULS_DIR.mkdir(parents=True, exist_ok=True)
@@ -244,24 +282,11 @@ def generate_hint(
     label = settings.pubkey_label_map.get(pubkey, pubkey[:8])
     log.info("generating hint for %s...", label)
 
-    client = anthropic.Anthropic(api_key=api_key, base_url=base_url)
-    message = client.messages.create(
-        model=model,
-        max_tokens=1500,
-        system=HINT_PROMPT,
-        messages=[{"role": "user", "content": soul_content}],
-    )
-    hint = message.content[0].text.strip()
+    hint = _call_llm(HINT_PROMPT, soul_content, api_key, base_url, model, max_tokens=1500).strip()
     log.info("hint for %s: %s", label, hint[:80])
 
     # Generate micro summary from hint
-    micro_resp = client.messages.create(
-        model=model,
-        max_tokens=150,
-        system=MICRO_PROMPT,
-        messages=[{"role": "user", "content": hint}],
-    )
-    micro = micro_resp.content[0].text.strip()
+    micro = _call_llm(MICRO_PROMPT, hint, api_key, base_url, model, max_tokens=150).strip()
     log.info("micro for %s: %s", label, micro[:80])
 
     return hint, micro
