@@ -995,4 +995,12 @@ describe('MyComponent', () => {
 
 **Your task is not considered finished until this test passes without errors.**
 
+## Backend Pipeline Backlog
+
+### Embedder concurrency optimization
+`backend/ingestion/embedder.py` processes embedding batches of 16 sequentially via HTTP. For 12K+ notes this takes ~38 min. Should use `asyncio.gather` with a semaphore (e.g. 5 concurrent batches) to parallelize HF API calls. Also: `time.sleep()` inside async functions blocks the event loop — should be `await asyncio.sleep()`.
+
+### Odd reply count
+`replies: 6575 notes got reply context out of 5986 replies` — more notes enriched than unique parent IDs. Expected: multiple notes can reply to the same parent, so 1 parent → N reply enrichments. Not a bug but worth understanding if numbers look off.
+
 **This requirement applies regardless of whether you wrote new tests or not.** The test script validates the entire codebase, including TypeScript compilation, ESLint rules, and existing test suite.

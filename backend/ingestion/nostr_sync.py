@@ -20,6 +20,7 @@ import logging
 import re
 import ssl
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -155,7 +156,7 @@ def _decode_note1(note: str) -> str | None:
 
 # ── Metadata and event fetching ──────────────────────────────────────────────
 
-def _fetch_metadata_batch(pubkeys: set[str], relay_urls: list[str]) -> dict[str, str]:
+async def _fetch_metadata_batch(pubkeys: set[str], relay_urls: list[str]) -> dict[str, str]:
     """Fetch kind:0 metadata for pubkeys from relays. Returns {hex_pk: display_name}."""
     names: dict[str, str] = {}
     if not pubkeys or not relay_urls:
@@ -210,7 +211,7 @@ def _fetch_metadata_batch(pubkeys: set[str], relay_urls: list[str]) -> dict[str,
     for i in range(0, len(pk_list), batch_size):
         batch = pk_list[i : i + batch_size]
         try:
-            batch_results = asyncio.run(_fetch_batch(batch))
+            batch_results = await _fetch_batch(batch)
             names.update(batch_results)
         except Exception as e:
             log.warning("metadata batch %d-%d failed: %s", i, i + len(batch), e)
@@ -285,7 +286,7 @@ MAX_PK_REFS_PER_NOTE = 20    # max npub/nprofile username lookups per note
 MAX_EVENT_REFS_PER_NOTE = 10  # max nevent/naddr/note1 event fetches per note
 
 
-def enrich_notes(notes: list[NormalizedNote], relay_urls: list[str], label_map: dict[str, str]) -> None:
+async def enrich_notes(notes: list[NormalizedNote], relay_urls: list[str], label_map: dict[str, str]) -> None:
     """Enrich note content in-place: resolve names, referenced events.
 
     Modifies notes[i].content with enriched versions.
@@ -370,7 +371,7 @@ def enrich_notes(notes: list[NormalizedNote], relay_urls: list[str], label_map: 
     # Fetch metadata for referenced pubkeys
     name_lookup = dict(label_map)
     if referenced_pks:
-        fetched = _fetch_metadata_batch(referenced_pks, relay_urls)
+        fetched = await _fetch_metadata_batch(referenced_pks, relay_urls)
         name_lookup.update(fetched)
         log.info("resolved %d/%d pubkey names", len(fetched), len(referenced_pks))
 
@@ -493,14 +494,42 @@ class NormalizedNote:
     mentioned_pubkeys: list[str] = field(default_factory=list)  # all p tag pubkeys
 
 
+PAGE_SIZE = 500  # Most relays cap at 500 per request
+
+
+def _discover_relays(pubkeys: list[str], relay_urls: list[str]) -> list[str]:
+    """Query kind 10002 (NIP-65 relay list) for each pubkey, merge with defaults."""
+    discovered: set[str] = set()
+    for relay_url in relay_urls[:2]:
+        try:
+            filt = {"kinds": [10002], "authors": pubkeys, "limit": len(pubkeys)}
+            raw_events = _query_relay(relay_url, filt, timeout=10.0)
+            for ev in raw_events:
+                for tag in ev.get("tags", []):
+                    if tag[0] == "r" and tag[1].startswith("wss://"):
+                        discovered.add(tag[1].rstrip("/"))
+            log.info("discovered %d relay URLs from %s", len(raw_events), relay_url)
+        except Exception as e:
+            log.debug("relay discovery from %s failed: %s", relay_url, e)
+
+    # Merge: user relays first (they publish there), then defaults
+    merged = list(discovered) + [r for r in relay_urls if r not in discovered]
+    log.info("relay discovery: %d user relays + %d defaults = %d total",
+             len(discovered), len(relay_urls) - len(discovered & set(relay_urls)), len(merged))
+    return merged
+
+
 def fetch_all_notes(
     pubkeys: list[str] | None = None,
     relay_urls: list[str] | None = None,
-    limit_per_pubkey: int = 2000,
+    limit_per_pubkey: int = 5000,
     timeout: float = 10.0,
     since: int = 0,
 ) -> list[NormalizedNote]:
     """Fetch events of all supported kinds for configured pubkeys.
+
+    Paginates through each relay using `until` timestamps to get past
+    relay-imposed page limits (usually 500 events per request).
 
     Args:
         since: Unix timestamp. Only fetch events newer than this. 0 = fetch all.
@@ -509,37 +538,89 @@ def fetch_all_notes(
     pubkeys = pubkeys or settings.pubkey_list
     relay_urls = relay_urls or settings.relay_list
 
+    # Discover user-specific relays from kind 10002
+    all_relays = _discover_relays(pubkeys, relay_urls)
+
     seen_ids: set[str] = set()
     all_notes: list[NormalizedNote] = []
+    pk_counts: dict[str, int] = {}
 
     for pubkey in pubkeys:
-        filter_obj: dict = {
-            "kinds": FETCH_KINDS,
-            "authors": [pubkey],
-            "limit": limit_per_pubkey,
-        }
-        # Incremental: only fetch events after last sync
-        if since:
-            filter_obj["since"] = since
+        pk_label = settings.pubkey_label_map.get(pubkey, pubkey[:8])
+        pk_new = 0
 
-        for relay_url in relay_urls:
-            try:
-                raw_events = _query_relay(relay_url, filter_obj, timeout=timeout)
+        for relay_url in all_relays:
+            relay_host = relay_url.replace("wss://", "")
+            relay_total = 0
+            until = 0  # 0 = no upper bound, get most recent first
+            page = 0
+
+            while True:
+                page += 1
+                filter_obj: dict = {
+                    "kinds": FETCH_KINDS,
+                    "authors": [pubkey],
+                    "limit": PAGE_SIZE,
+                }
+                if since:
+                    filter_obj["since"] = since
+                if until:
+                    filter_obj["until"] = until
+
+                try:
+                    raw_events = _query_relay(relay_url, filter_obj, timeout=timeout)
+                except Exception as e:
+                    log.warning("  %s on %s page %d failed: %s", pk_label, relay_host, page, e)
+                    break
+
+                if not raw_events:
+                    break
+
+                # Count new (deduped) events from this page
+                page_new = 0
+                oldest_ts = float("inf")
                 for ev in raw_events:
                     ev_id = ev.get("id", "")
+                    ev_ts = ev.get("created_at", 0)
+                    if ev_ts and ev_ts < oldest_ts:
+                        oldest_ts = ev_ts
                     if ev_id and ev_id not in seen_ids:
                         seen_ids.add(ev_id)
                         note = _normalize_event(ev, settings.pubkey_label_map)
                         if note:
                             all_notes.append(note)
-                log.info("relay %s: got events for %s (%d total)", relay_url, pubkey[:8], len(all_notes))
-            except Exception as e:
-                log.warning("relay %s failed: %s", relay_url, e)
-                continue
+                            page_new += 1
+                            pk_new += 1
+                            relay_total += 1
+
+                log.info("  %s on %s page %d: %d raw, %d new", pk_label, relay_host, page, len(raw_events), page_new)
+
+                # Stop if: no new events, got fewer than page size (last page), or hit limit
+                if len(raw_events) < PAGE_SIZE:
+                    break
+                if page_new == 0:
+                    break
+                if pk_new >= limit_per_pubkey:
+                    break
+
+                # Set until to oldest event timestamp for next page
+                if oldest_ts == float("inf"):
+                    break
+                until = int(oldest_ts)
+
+            if relay_total:
+                log.info("  %s on %s: %d total new events (%d pages)", pk_label, relay_host, relay_total, page)
+
+        pk_counts[pubkey] = pk_new
+        if pk_new:
+            log.info("  %s total: %d events", pk_label, pk_new)
 
     all_notes.sort(key=lambda n: n.created_at, reverse=True)
     mode = "incremental" if since else "full"
-    log.info("fetched %d events from %d pubkeys (%s sync)", len(all_notes), len(pubkeys), mode)
+    log.info("fetched %d unique events from %d pubkeys (%s sync)", len(all_notes), len(pubkeys), mode)
+    for pk, count in pk_counts.items():
+        label = settings.pubkey_label_map.get(pk, pk[:8])
+        log.info("  %s: %d events", label, count)
     return all_notes
 
 
@@ -721,7 +802,7 @@ async def sync_and_index(hf_api_key: str = "", full: bool = False) -> int:
         return 0
 
     # Enrich content: resolve names, referenced events
-    enrich_notes(notes, settings.relay_list, settings.pubkey_label_map)
+    await enrich_notes(notes, settings.relay_list, settings.pubkey_label_map)
 
     log.info("embedding %d events...", len(notes))
     contents = [n.content for n in notes]
@@ -755,6 +836,487 @@ async def sync_and_index(hf_api_key: str = "", full: bool = False) -> int:
     # Update sync state after successful index
     update_sync_timestamps(settings.pubkey_list)
 
+    return count
+
+
+# ── Individual pipeline phases (for workflow step visibility) ─────────────────
+
+BATCH_FILE = Path("data/sync_batch.json")
+
+
+BATCH_META_KEY = "_meta"
+
+def _save_notes(notes: list[NormalizedNote], path: Path, full: bool = False) -> None:
+    """Serialize notes to JSON."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    items = []
+    for n in notes:
+        items.append({
+            "event_id": n.event_id, "pubkey": n.pubkey, "content": n.content,
+            "created_at": n.created_at, "kind": n.kind, "hashtags": n.hashtags,
+            "source_type": n.source_type, "title": n.title, "summary": n.summary,
+            "d_tag": n.d_tag, "reply_to_id": n.reply_to_id,
+            "reply_to_pubkey": n.reply_to_pubkey, "mentioned_pubkeys": n.mentioned_pubkeys,
+        })
+    with open(path, "w") as f:
+        json.dump({"_meta": {"full": full}, "notes": items}, f)
+    log.info("saved %d notes to %s (full=%s)", len(notes), path, full)
+
+
+def _load_notes(path: Path) -> list[NormalizedNote]:
+    """Deserialize notes from JSON."""
+    with open(path) as f:
+        data = json.load(f)
+    # Handle both old format (list) and new format (dict with _meta)
+    if isinstance(data, dict):
+        items = data.get("notes", [])
+    else:
+        items = data
+    notes = []
+    for d in items:
+        notes.append(NormalizedNote(**d))
+    log.info("loaded %d notes from %s", len(notes), path)
+    return notes
+
+
+def _is_full_sync(path: Path) -> bool:
+    """Check if the batch file was created from a full sync."""
+    if not path.exists():
+        return False
+    with open(path) as f:
+        data = json.load(f)
+    if isinstance(data, dict):
+        return data.get("_meta", {}).get("full", False)
+    return False
+
+
+def fetch_notes(full: bool = False) -> int:
+    """Phase 1: Fetch notes from relays. Saves to data/sync_batch.json."""
+    from ingestion.sync_state import load_sync_state, update_sync_timestamps
+
+    settings = get_settings()
+    since = 0
+    if not full:
+        state = load_sync_state()
+        if state:
+            since = min(state.values())
+            log.info("incremental fetch since %d", since)
+
+    notes = fetch_all_notes(since=since)
+    if not notes:
+        log.warning("no events fetched")
+        if not full:
+            update_sync_timestamps(settings.pubkey_list)
+        return 0
+
+    _save_notes(notes, BATCH_FILE, full=full)
+    return len(notes)
+
+
+async def enrich_npubs() -> int:
+    """Phase 2a: Resolve npub → @Username in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect npub pubkeys
+    referenced_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NPUB_RE.finditer(note.content):
+            if count >= MAX_PK_REFS_PER_NOTE:
+                break
+            pk = _decode_npub(m.group(0).replace("nostr:", ""))
+            if pk:
+                referenced_pks.add(pk)
+                count += 1
+        # Also from tags
+        for pk in note.mentioned_pubkeys:
+            if pk: referenced_pks.add(pk)
+        if note.reply_to_pubkey:
+            referenced_pks.add(pk)
+
+    referenced_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if referenced_pks:
+        fetched = await _fetch_metadata_batch(referenced_pks, settings.relay_list)
+        name_lookup.update(fetched)
+        log.info("npub: resolved %d/%d names", len(fetched), len(referenced_pks))
+
+    subs = [0]
+    def _replace_factory():
+        pk_remaining = [MAX_PK_REFS_PER_NOTE]
+        def _replace(match):
+            if pk_remaining[0] <= 0:
+                return match.group(0)
+            npub_str = match.group(0).replace("nostr:", "")
+            pk = _decode_npub(npub_str)
+            if pk and pk in name_lookup:
+                pk_remaining[0] -= 1
+                subs[0] += 1
+                replacement = f"@{name_lookup[pk]}"
+                log.info("  npub %s → %s", npub_str[:20], replacement)
+                return replacement
+            return npub_str
+        return _replace
+
+    for note in notes:
+        note.content = NPUB_RE.sub(_replace_factory(), note.content)
+        note.content = note.content.replace("@@", "@")
+
+    log.info("npub: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+async def enrich_nprofiles() -> int:
+    """Phase 2b: Resolve nprofile → @Username in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect nprofile pubkeys
+    referenced_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NPROFILE_RE.finditer(note.content):
+            if count >= MAX_PK_REFS_PER_NOTE:
+                break
+            pk = _decode_nprofile(m.group(0))
+            if pk:
+                referenced_pks.add(pk)
+                count += 1
+
+    referenced_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if referenced_pks:
+        fetched = await _fetch_metadata_batch(referenced_pks, settings.relay_list)
+        name_lookup.update(fetched)
+        log.info("nprofile: resolved %d/%d names", len(fetched), len(referenced_pks))
+
+    subs = [0]
+    def _replace_factory():
+        pk_remaining = [MAX_PK_REFS_PER_NOTE]
+        def _replace(match):
+            if pk_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0)
+            pk = _decode_nprofile(original)
+            if pk and pk in name_lookup:
+                pk_remaining[0] -= 1
+                subs[0] += 1
+                replacement = f"@{name_lookup[pk]}"
+                log.info("  nprofile %s → %s", original[:20], replacement)
+                return replacement
+            return original.replace("nostr:", "")
+        return _replace
+
+    for note in notes:
+        note.content = NPROFILE_RE.sub(_replace_factory(), note.content)
+        note.content = note.content.replace("@@", "@")
+
+    log.info("nprofile: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_nevents() -> int:
+    """Phase 2c: Resolve nevent → quoted content preview in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect nevent IDs + author pubkeys
+    event_ids: set[str] = set()
+    author_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NEVENT_RE.finditer(note.content):
+            if count >= MAX_EVENT_REFS_PER_NOTE:
+                break
+            decoded = _decode_nevent(m.group(0))
+            if decoded:
+                event_ids.add(decoded["event_id"])
+                if decoded.get("author_pk"):
+                    author_pks.add(decoded["author_pk"])
+                count += 1
+
+    # Fetch author names
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+
+    # Fetch referenced events
+    event_lookup = _fetch_referenced_events(event_ids, [], settings.relay_list)
+    log.info("nevent: fetched %d/%d events", len(event_lookup), len(event_ids))
+
+    subs = [0]
+    def _replace_factory():
+        event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+        def _replace(match):
+            if event_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0)
+            decoded = _decode_nevent(original)
+            if not decoded:
+                return original.replace("nostr:", "")
+            ev = event_lookup.get(decoded["event_id"])
+            if not ev:
+                return original.replace("nostr:", "")
+            event_remaining[0] -= 1
+            subs[0] += 1
+            author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
+            preview = ev.get("content", "")[:100].replace("\n", " ").strip()
+            if ev.get("title"):
+                replacement = f"[{ev['title']} by @{author}]"
+            elif preview:
+                replacement = f'[quoting @{author}: "{preview}..."]'
+            else:
+                replacement = f"[event by @{author}]"
+            log.info("  nevent %s → %s", original[:20], replacement[:60])
+            return replacement
+        return _replace
+
+    for note in notes:
+        note.content = NEVENT_RE.sub(_replace_factory(), note.content)
+
+    log.info("nevent: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_naddrs() -> int:
+    """Phase 2d: Resolve naddr → article reference in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect naddr refs
+    naddr_refs: list[dict] = []
+    author_pks: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NADDR_RE.finditer(note.content):
+            if count >= MAX_EVENT_REFS_PER_NOTE:
+                break
+            decoded = _decode_naddr(m.group(0))
+            if decoded:
+                naddr_refs.append(decoded)
+                if decoded.get("author_pk"):
+                    author_pks.add(decoded["author_pk"])
+                count += 1
+
+    # Fetch author names
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+
+    # Fetch naddr events
+    event_lookup = _fetch_referenced_events(set(), naddr_refs, settings.relay_list)
+    log.info("naddr: fetched %d/%d articles", len(event_lookup), len(naddr_refs))
+
+    subs = [0]
+    def _replace_factory():
+        event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+        def _replace(match):
+            if event_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0)
+            decoded = _decode_naddr(original)
+            if not decoded:
+                return original.replace("nostr:", "")
+            event_remaining[0] -= 1
+            subs[0] += 1
+            key = f"naddr:{decoded['author_pk']}:{decoded['kind']}:{decoded['d_tag']}"
+            ev = event_lookup.get(key)
+            author = name_lookup.get(decoded.get("author_pk", ""), decoded.get("author_pk", "")[:8])
+            if ev and ev.get("title"):
+                replacement = f"[{ev['title']} by @{author}]"
+            elif ev and ev.get("summary"):
+                replacement = f"[article by @{author}: {ev['summary'][:80]}]"
+            else:
+                replacement = f"[article by @{author}]"
+            log.info("  naddr %s → %s", original[:20], replacement[:60])
+            return replacement
+        return _replace
+
+    for note in notes:
+        note.content = NADDR_RE.sub(_replace_factory(), note.content)
+
+    log.info("naddr: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_note1s() -> int:
+    """Phase 2e: Resolve note1 → note content preview in batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect note1 event IDs
+    event_ids: set[str] = set()
+    for note in notes:
+        count = 0
+        for m in NOTE_RE.finditer(note.content):
+            if count >= MAX_EVENT_REFS_PER_NOTE:
+                break
+            eid = _decode_note1(m.group(0).replace("nostr:", ""))
+            if eid:
+                event_ids.add(eid)
+                count += 1
+
+    # Fetch referenced events + their author names
+    event_lookup = _fetch_referenced_events(event_ids, [], settings.relay_list)
+    author_pks = {ev["pubkey"] for ev in event_lookup.values() if ev.get("pubkey")}
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+    log.info("note1: fetched %d/%d notes", len(event_lookup), len(event_ids))
+
+    subs = [0]
+    def _replace_factory():
+        event_remaining = [MAX_EVENT_REFS_PER_NOTE]
+        def _replace(match):
+            if event_remaining[0] <= 0:
+                return match.group(0)
+            original = match.group(0).replace("nostr:", "")
+            eid = _decode_note1(original)
+            if not eid:
+                return original
+            ev = event_lookup.get(eid)
+            if not ev:
+                return original
+            event_remaining[0] -= 1
+            subs[0] += 1
+            author = name_lookup.get(ev.get("pubkey", ""), ev.get("pubkey", "")[:8])
+            preview = ev.get("content", "")[:100].replace("\n", " ").strip()
+            if preview:
+                replacement = f'[quoting @{author}: "{preview}..."]'
+            else:
+                replacement = f"[note by @{author}]"
+            log.info("  note1 %s → %s", original[:20], replacement[:60])
+            return replacement
+        return _replace
+
+    for note in notes:
+        note.content = NOTE_RE.sub(_replace_factory(), note.content)
+
+    log.info("note1: %d substitutions across %d notes", subs[0], len(notes))
+    _save_notes(notes, BATCH_FILE)
+    return subs[0]
+
+
+def enrich_replies() -> int:
+    """Phase 2f: Prepend reply context to notes that reply to others.
+
+    Transforms content like:
+      "great point!"
+    Into:
+      '[Replying to @Alice who said "I think bitcoin will..."]: great point!'
+    """
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Collect parent event IDs from notes that are replies
+    parent_ids: set[str] = set()
+    for note in notes:
+        if note.reply_to_id:
+            parent_ids.add(note.reply_to_id)
+
+    if not parent_ids:
+        log.info("replies: no reply notes found, skipping")
+        _save_notes(notes, BATCH_FILE)
+        return 0
+
+    # Fetch parent events
+    parent_lookup = _fetch_referenced_events(parent_ids, [], settings.relay_list)
+    log.info("replies: fetched %d/%d parent events", len(parent_lookup), len(parent_ids))
+
+    # Resolve parent author names
+    author_pks = {ev["pubkey"] for ev in parent_lookup.values() if ev.get("pubkey")}
+    author_pks -= set(settings.pubkey_label_map.keys())
+    name_lookup = dict(settings.pubkey_label_map)
+    if author_pks:
+        fetched = asyncio.run(_fetch_metadata_batch(author_pks, settings.relay_list))
+        name_lookup.update(fetched)
+
+    subs = 0
+    for note in notes:
+        if not note.reply_to_id:
+            continue
+        parent = parent_lookup.get(note.reply_to_id)
+        if not parent:
+            continue
+        author = name_lookup.get(parent.get("pubkey", ""), parent.get("pubkey", "")[:8])
+        preview = parent.get("content", "")[:120].replace("\n", " ").strip()
+        if preview:
+            prefix = f'[Replying to @{author} who said "{preview}"]: '
+        else:
+            prefix = f"[Replying to @{author}]: "
+        log.info("  reply %s → @%s: %s", note.event_id[:12], author, note.content[:60])
+        note.content = prefix + note.content
+        subs += 1
+
+    log.info("replies: %d notes got reply context out of %d replies", subs, len(parent_ids))
+    _save_notes(notes, BATCH_FILE)
+    return subs
+
+
+async def enrich_notes_file() -> int:
+    """Phase 2 (all): Run all enrichment types on batch file."""
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+    await enrich_notes(notes, settings.relay_list, settings.pubkey_label_map)
+    _save_notes(notes, BATCH_FILE)
+    return len(notes)
+
+
+async def embed_and_index(hf_api_key: str = "") -> int:
+    """Phase 3: Embed enriched notes and index to Qdrant."""
+    from ingestion.embedder import embed_texts
+    from ingestion.indexer import ensure_collection, build_note_point, upsert_points, get_qdrant_client
+    from ingestion.sync_state import update_sync_timestamps
+
+    settings = get_settings()
+    notes = _load_notes(BATCH_FILE)
+
+    # Full sync: drop and recreate collection to clear stale data
+    full = _is_full_sync(BATCH_FILE)
+    if full:
+        from qdrant_client import QdrantClient
+        client = get_qdrant_client()
+        existing = [c.name for c in client.get_collections().collections]
+        if settings.collection_name in existing:
+            log.info("full sync: dropping collection '%s'", settings.collection_name)
+            client.delete_collection(settings.collection_name)
+            log.info("collection dropped, will recreate on upsert")
+
+    log.info("embedding %d events...", len(notes))
+    contents = [n.content for n in notes]
+    vectors = await embed_texts(contents, api_key=hf_api_key)
+
+    label_map = settings.pubkey_label_map
+    points = []
+    for note, vector in zip(notes, vectors):
+        if vector is None:
+            continue
+        point = build_note_point(
+            event_id=note.event_id, vector=vector, pubkey=note.pubkey,
+            content=note.content, created_at=note.created_at,
+            hashtags=note.hashtags, author_label=label_map.get(note.pubkey, ""),
+            source_type=note.source_type, kind=note.kind,
+            reply_to_id=note.reply_to_id, reply_to_pubkey=note.reply_to_pubkey,
+            mentioned_pubkeys=note.mentioned_pubkeys,
+        )
+        points.append(point)
+
+    client = ensure_collection()
+    count = upsert_points(points, client=client)
+    log.info("indexed %d events", count)
+
+    update_sync_timestamps(settings.pubkey_list)
     return count
 
 
