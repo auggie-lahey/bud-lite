@@ -31,7 +31,7 @@ from app.config import get_settings
 log = logging.getLogger(__name__)
 
 # Kinds to fetch from relays. Broad coverage for semantic search.
-FETCH_KINDS = [0, 1, 6, 7, 14, 30023, 35128]
+FETCH_KINDS = [0, 1, 6, 7, 14, 30023, 35128, 39701]
 
 # Human-readable kind labels
 KIND_LABELS = {
@@ -42,6 +42,7 @@ KIND_LABELS = {
     14: "channel",
     30023: "article",
     35128: "manifest",
+    39701: "bookmark",
 }
 
 # Bech32 charset for decoding
@@ -712,6 +713,35 @@ def _normalize_event(event: dict, label_map: dict[str, str]) -> Optional[Normali
             reply_to_id=reply_to_id,
             reply_to_pubkey=reply_to_pubkey,
             mentioned_pubkeys=mentioned_pubkeys,
+        )
+
+    if kind == 39701:
+        # NIP-B0: Web bookmark — d tag is URL without scheme
+        d_tag = next((t[1] for t in tags if t[0] == "d"), "")
+        title = next((t[1] for t in tags if t[0] == "title"), "")
+        url = f"https://{d_tag}" if d_tag and not d_tag.startswith("http") else d_tag
+        parts = []
+        if title:
+            parts.append(f"Bookmark: {title}")
+        if url:
+            parts.append(f"URL: {url}")
+        if content:
+            parts.append(content)
+        bookmark_content = "\n".join(parts)
+
+        return NormalizedNote(
+            event_id=event_id,
+            pubkey=pubkey,
+            content=bookmark_content,
+            created_at=created_at,
+            kind=kind,
+            hashtags=hashtags,
+            source_type="nostr_bookmark",
+            title=title,
+            d_tag=d_tag,
+            reply_to_id="",
+            reply_to_pubkey="",
+            mentioned_pubkeys=[],
         )
 
     return NormalizedNote(
