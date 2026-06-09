@@ -42,7 +42,8 @@ NOTE_RE = re.compile(r'(?<!/)(?:nostr:)?note1[a-zA-HJ-NP-Z0-9]+')
 NPUB_RE = re.compile(r'(?<!/)(?:nostr:)?npub1([a-zA-HJ-NP-Z0-9]+)')
 
 # Size constants
-CHUNK_CHAR_LIMIT = 100_000  # ~25K tokens per chunk of raw notes
+CHUNK_TOKEN_LIMIT = 100_000  # max tokens per chunk of raw notes (fits LLM context)
+CHARS_PER_TOKEN = 4           # ~4 chars per token → 100K tokens = 400K chars
 FINAL_SOUL_TOKENS = 10_000  # target token count for final merged soul
 
 SOUL_PROMPT = """\
@@ -417,16 +418,16 @@ def _call_llm(system_prompt: str, user_content: str, api_key: str, base_url: str
 
 # ── Chunking ────────────────────────────────────────────────────────────────
 
-def _chunk_notes(notes: list[dict], char_limit: int = CHUNK_CHAR_LIMIT) -> list[list[dict]]:
-    """Split notes into chunks that fit within char_limit when formatted.
+def _chunk_notes(notes: list[dict], token_limit: int = CHUNK_TOKEN_LIMIT) -> list[list[dict]]:
+    """Split notes into chunks that fit within token_limit when formatted.
 
     Notes are sorted newest-first. Chunks preserve date ordering within each chunk.
-    Each chunk will be ~char_limit characters when formatted (~25K tokens).
+    Token count estimated via CHARS_PER_TOKEN ratio.
     """
     if not notes:
         return []
 
-    # Pre-format to get accurate char counts, then chunk by note boundaries
+    char_limit = token_limit * CHARS_PER_TOKEN
     chunks = []
     current_chunk = []
     current_size = 0
@@ -550,7 +551,8 @@ def generate_soul_file(
     new_chars = len(new_formatted)
 
     # Chunk the new notes if they exceed the threshold
-    if new_chars >= CHUNK_CHAR_LIMIT:
+    chunk_threshold_chars = CHUNK_TOKEN_LIMIT * CHARS_PER_TOKEN
+    if new_chars >= chunk_threshold_chars:
         new_chunks = _chunk_notes(new_notes)
         log.info("new notes: %d notes, %d chars → %d new chunks", len(new_notes), new_chars, len(new_chunks))
 
@@ -572,7 +574,7 @@ def generate_soul_file(
             log.info("chunk saved: %s (%d chars)", chunk_name, len(chunk_content))
     else:
         log.info("new notes: %d notes, %d chars — below %d threshold, not chunking",
-                 len(new_notes), new_chars, CHUNK_CHAR_LIMIT)
+                 len(new_notes), new_chars, chunk_threshold_chars)
 
     # ── Phase 2: Merge all chunk souls + un-chunked new notes ────────
     all_chunk_paths = _get_existing_chunks(pubkey)
@@ -583,7 +585,7 @@ def generate_soul_file(
         merge_parts.append(cp.read_text())
 
     # If new notes weren't large enough to chunk, include them as raw formatted text
-    if new_chars < CHUNK_CHAR_LIMIT and new_notes:
+    if new_chars < chunk_threshold_chars and new_notes:
         import datetime
         oldest_new = datetime.datetime.fromtimestamp(min(n["date"] for n in new_notes if n["date"])).strftime("%Y-%m-%d")
         newest_new = datetime.datetime.fromtimestamp(max(n["date"] for n in new_notes if n["date"])).strftime("%Y-%m-%d")
@@ -594,7 +596,7 @@ def generate_soul_file(
         merge_parts.append(new_formatted_labeled)
         log.info("including %d new raw notes in merge", len(new_notes))
 
-    log.info("merging %d chunk souls + %d raw note blocks", len(all_chunk_paths), 1 if new_chars < CHUNK_CHAR_LIMIT and new_notes else 0)
+    log.info("merging %d chunk souls + %d raw note blocks", len(all_chunk_paths), 1 if new_chars < chunk_threshold_chars and new_notes else 0)
 
     # If single chunk and no raw notes, just use it directly
     if len(merge_parts) == 1:
