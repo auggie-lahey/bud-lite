@@ -167,6 +167,11 @@ jobs:
         id: enrich-replies
         run: python -m worker.runner enrich-replies
 
+      - name: Fetch podcast transcripts
+        if: env.HAS_CREDENTIALS == 'true'
+        id: enrich-transcripts
+        run: python -m worker.runner enrich-transcripts
+
       - name: Embed and index to Qdrant
         if: env.HAS_CREDENTIALS == 'true'
         id: index

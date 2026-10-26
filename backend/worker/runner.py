@@ -86,6 +86,16 @@ def run_enrich_note1s() -> int:
     return count
 
 
+def run_enrich_transcripts() -> int:
+    """Phase 2g: Fetch podcast transcripts."""
+    from ingestion.nostr_sync import enrich_transcripts
+
+    log.info("Phase 2g: fetching podcast transcripts...")
+    count = enrich_transcripts()
+    log.info("Phase 2g complete: %d transcripts fetched", count)
+    return count
+
+
 def run_enrich_replies() -> int:
     """Phase 2f: Prepend reply context to notes."""
     from ingestion.nostr_sync import enrich_replies
@@ -180,6 +190,8 @@ if __name__ == "__main__":
             run_enrich_note1s()
         elif cmd == "enrich-replies":
             run_enrich_replies()
+        elif cmd == "enrich-transcripts":
+            run_enrich_transcripts()
         elif cmd == "index":
             asyncio.run(run_index(hf_api_key=hf_key))
         elif cmd == "souls":
@@ -202,6 +214,7 @@ if __name__ == "__main__":
             print("  enrich-naddrs         Resolve naddr → article reference")
             print("  enrich-note1s         Resolve note1 → note content")
             print("  enrich-replies        Prepend reply context to notes")
+            print("  enrich-transcripts    Fetch podcast SRT transcripts")
             print("  index                 Embed and upsert to Qdrant")
             print()
             print("Shortcuts:")

@@ -31,7 +31,7 @@ from app.config import get_settings
 log = logging.getLogger(__name__)
 
 # Kinds to fetch from relays. Broad coverage for semantic search.
-FETCH_KINDS = [0, 1, 6, 7, 14, 30023, 35128]
+FETCH_KINDS = [0, 1, 6, 7, 14, 30023, 35128, 39701, 30054]
 
 # Human-readable kind labels
 KIND_LABELS = {
@@ -41,7 +41,9 @@ KIND_LABELS = {
     7: "reaction",
     14: "channel",
     30023: "article",
+    30054: "podcast",
     35128: "manifest",
+    39701: "bookmark",
 }
 
 # Bech32 charset for decoding
@@ -492,6 +494,7 @@ class NormalizedNote:
     reply_to_id: str = ""       # e tag — event being replied to
     reply_to_pubkey: str = ""   # p tag — pubkey being replied to
     mentioned_pubkeys: list[str] = field(default_factory=list)  # all p tag pubkeys
+    transcript_url: str = ""     # kind 30054 podcast transcript URL
 
 
 PAGE_SIZE = 500  # Most relays cap at 500 per request
@@ -714,6 +717,74 @@ def _normalize_event(event: dict, label_map: dict[str, str]) -> Optional[Normali
             mentioned_pubkeys=mentioned_pubkeys,
         )
 
+    if kind == 39701:
+        # NIP-B0: Web bookmark — d tag is URL without scheme
+        d_tag = next((t[1] for t in tags if t[0] == "d"), "")
+        title = next((t[1] for t in tags if t[0] == "title"), "")
+        url = f"https://{d_tag}" if d_tag and not d_tag.startswith("http") else d_tag
+        parts = []
+        if title:
+            parts.append(f"Bookmark: {title}")
+        if url:
+            parts.append(f"URL: {url}")
+        if content:
+            parts.append(content)
+        bookmark_content = "\n".join(parts)
+
+        return NormalizedNote(
+            event_id=event_id,
+            pubkey=pubkey,
+            content=bookmark_content,
+            created_at=created_at,
+            kind=kind,
+            hashtags=hashtags,
+            source_type="nostr_bookmark",
+            title=title,
+            d_tag=d_tag,
+            reply_to_id="",
+            reply_to_pubkey="",
+            mentioned_pubkeys=[],
+        )
+
+    if kind == 30054:
+        # Podstr podcast/livestream episode
+        title = next((t[1] for t in tags if t[0] == "title"), "")
+        summary = next((t[1] for t in tags if t[0] == "summary"), "")
+        description = next((t[1] for t in tags if t[0] == "description"), "")
+        audio_url = next((t[1] for t in tags if t[0] == "audio"), "")
+        transcript_url = next((t[1] for t in tags if t[0] == "transcript"), "")
+        d_tag = next((t[1] for t in tags if t[0] == "d"), "")
+        parts = []
+        if title:
+            parts.append(f"# {title}")
+        if summary:
+            parts.append(f"Summary: {summary}")
+        if description:
+            parts.append(description)
+        if audio_url:
+            parts.append(f"Audio: {audio_url}")
+        if transcript_url:
+            parts.append(f"Transcript: {transcript_url}")
+        # Transcript fetching happens in enrich_transcripts step
+        podcast_content = "\n\n".join(parts)
+
+        return NormalizedNote(
+            event_id=event_id,
+            pubkey=pubkey,
+            content=podcast_content,
+            created_at=created_at,
+            kind=kind,
+            hashtags=hashtags,
+            source_type="nostr_podcast",
+            title=title,
+            summary=summary,
+            d_tag=d_tag,
+            reply_to_id="",
+            reply_to_pubkey="",
+            mentioned_pubkeys=[],
+            transcript_url=transcript_url,
+        )
+
     return NormalizedNote(
         event_id=event_id,
         pubkey=pubkey,
@@ -857,6 +928,7 @@ def _save_notes(notes: list[NormalizedNote], path: Path, full: bool = False) -> 
             "source_type": n.source_type, "title": n.title, "summary": n.summary,
             "d_tag": n.d_tag, "reply_to_id": n.reply_to_id,
             "reply_to_pubkey": n.reply_to_pubkey, "mentioned_pubkeys": n.mentioned_pubkeys,
+            "transcript_url": n.transcript_url,
         })
     with open(path, "w") as f:
         json.dump({"_meta": {"full": full}, "notes": items}, f)
@@ -1206,6 +1278,55 @@ def enrich_note1s() -> int:
     log.info("note1: %d substitutions across %d notes", subs[0], len(notes))
     _save_notes(notes, BATCH_FILE)
     return subs[0]
+
+
+def enrich_transcripts() -> int:
+    """Phase 2g: Fetch SRT transcripts for podcast episodes (kind 30054).
+
+    Downloads SRT files, strips timestamps, prepends transcript text to note content.
+    """
+    import httpx
+
+    notes = _load_notes(BATCH_FILE)
+    subs = 0
+    for note in notes:
+        if not note.transcript_url:
+            continue
+        try:
+            resp = httpx.get(note.transcript_url, timeout=30.0, follow_redirects=True)
+            resp.raise_for_status()
+            srt_text = _parse_srt(resp.text)
+            if srt_text:
+                transcript_preview = srt_text[:8000]  # cap to avoid bloating
+                note.content = f"TRANSCRIPT:\n{transcript_preview}\n\n---\n\n{note.content}"
+                subs += 1
+                label = note.title or note.event_id[:12]
+                log.info("  transcript: %s (%d chars)", label, len(srt_text))
+        except Exception as e:
+            log.warning("  transcript fetch failed for %s: %s", note.transcript_url[:60], e)
+
+    log.info("transcripts: %d fetched out of %d podcast episodes", subs,
+             sum(1 for n in notes if n.transcript_url))
+    _save_notes(notes, BATCH_FILE)
+    return subs
+
+
+def _parse_srt(srt_text: str) -> str:
+    """Strip SRT timestamps and sequence numbers, return plain text."""
+    import re
+    # Remove sequence numbers and timestamp lines
+    blocks = re.split(r'\n\n+', srt_text.strip())
+    lines = []
+    for block in blocks:
+        for line in block.split('\n'):
+            # Skip sequence numbers (digits only) and timestamp lines
+            if re.match(r'^\d+$', line.strip()):
+                continue
+            if re.match(r'^\d{2}:\d{2}:\d{2}', line.strip()):
+                continue
+            if line.strip():
+                lines.append(line.strip())
+    return ' '.join(lines)
 
 
 def enrich_replies() -> int:
